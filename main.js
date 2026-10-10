@@ -2,8 +2,8 @@
    ГЛАВНЫЙ МОДУЛЬ ИНИЦИАЛИЗАЦИИ (main.js)
    ========================================================= */
 
-import { cpu, vButtons, parseProgram, cpuStep, syncHardwareState } from './cpu.js';
-import { updateUI, updateSyntax, renderMemoryDumps, scrollToSlide, renderHardware } from './ui.js';
+import { cpu, vButtons, parseProgram, cpuStep, syncHardwareState, writeRAM, readRAM } from './cpu.js';
+import { updateUI, updateSyntax, renderMemoryDumps, scrollToSlide, renderHardware, highlightCode } from './ui.js';
 
 const PROGRAMS = {
     empty: {
@@ -136,7 +136,10 @@ function runLoop() {
     if (!cpu.running) return;
     const batchSize = Math.max(1, Math.floor(cpu.speed / 20));
     for (let i = 0; i < batchSize; i++) {
-        cpuStep(updateUI, haltExecution);
+        cpuStep(() => {
+            syncHardwareState();
+            updateUI();
+        }, haltExecution);
         if (!cpu.running || cpu.error) {
             haltExecution();
             break;
@@ -225,7 +228,12 @@ document.addEventListener('DOMContentLoaded', () => {
         gutter.scrollTop = txtArea.scrollTop;
     });
 
-    document.getElementById('btnStep').addEventListener('click', () => cpuStep(updateUI, haltExecution));
+    document.getElementById('btnStep').addEventListener('click', () => {
+        cpuStep(() => {
+            syncHardwareState();
+            updateUI();
+        }, haltExecution);
+    });
     document.getElementById('btnRun').addEventListener('click', toggleRun);
     document.getElementById('btnReset').addEventListener('click', window.cpuReset);
     document.getElementById('exampleSelector').addEventListener('change', loadSelectedExample);
@@ -246,7 +254,10 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'F11') {
             e.preventDefault();
-            cpuStep(updateUI, haltExecution);
+            cpuStep(() => {
+                syncHardwareState();
+                updateUI();
+            }, haltExecution);
         }
         if (e.key === 'F9') {
             e.preventDefault();
