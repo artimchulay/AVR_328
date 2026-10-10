@@ -11,6 +11,7 @@
     --accent-gold: #ffb300;
     --accent-red: #ff3d00;
     
+    /* Цвета подсветки синтаксиса */
     --syn-op: #38bdf8;
     --syn-com: #4ade80;
     --syn-lbl: #fb923c;
@@ -30,8 +31,10 @@ html, body {
     color: var(--text-main);
     font-family: var(--font-ui);
 }
+
 .app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
 
+/* ================= 1. ШАПКА ================= */
 .toolbar {
     background: var(--panel-bg); border-bottom: 1px solid var(--border-color);
     padding: 8px 14px; display: flex; align-items: center; justify-content: space-between;
@@ -73,9 +76,9 @@ html, body {
 .hint-icon { font-size: 1.1em; }
 .hint-text b { color: var(--accent-gold); }
 
+/* ================= 3 КОЛОНКИ / СЛАЙДЕР ================= */
 .slider-viewport { flex: 1; height: 100%; min-height: 0; overflow: hidden; }
 .slider-track { display: grid; grid-template-columns: 1.3fr 1fr 1fr; height: 100%; gap: 10px; padding: 10px; }
-
 .slide-panel {
     background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px;
     display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
@@ -92,6 +95,7 @@ html, body {
 .btn-clear-code:hover { color: #fff; border-color: #fff; }
 .editor-status { font-size: 0.78em; color: var(--text-muted); display: flex; gap: 10px; }
 
+/* ================= РЕДАКТОР С ЦВЕТНОЙ ПОДСВЕТКОЙ ================= */
 .editor-wrapper { flex: 1; display: flex; height: 100%; min-height: 0; background: #080a0f; position: relative; overflow: hidden; }
 .line-gutter {
     width: 48px; height: 100%; padding: 10px 0; background: #06070a; border-right: 1px solid #1a1e28;
@@ -99,11 +103,16 @@ html, body {
 }
 .gutter-row { height: var(--line-height); display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 6px; cursor: pointer; }
 .gutter-row:hover { background: rgba(255,255,255,0.05); }
+
+/* Красная точка 🔴 */
 .bp-marker { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
 .gutter-row.has-bp .bp-marker { background: #ff3d00; box-shadow: 0 0 8px #ff3d00; }
+
+/* Жёлтая стрелка ПК ▶ */
 .pc-arrow { font-size: 10px; color: transparent; font-weight: 800; width: 10px; text-align: center; }
 .gutter-row.is-pc .pc-arrow { color: #ffd600; text-shadow: 0 0 6px #ffd600; }
 .gutter-row.is-pc { background: rgba(255, 214, 0, 0.15) !important; }
+
 .gutter-num { color: #4b5563; font-size: 0.9em; min-width: 16px; text-align: right; }
 .gutter-row.is-pc .gutter-num { color: #ffd600; font-weight: 700; }
 
@@ -122,6 +131,7 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
 .syn-dir { color: var(--syn-dir); }
 .syn-num { color: var(--syn-num); }
 
+/* ================= ПЛАТА ВВОДА-ВЫВОДА ================= */
 .board-scroll-area { flex: 1; height: 100%; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .board-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; }
 .card-title { font-size: 0.86em; font-weight: 700; color: #fff; margin-bottom: 6px; }
@@ -162,6 +172,7 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
     border-radius: 6px; font-family: var(--font-mono); font-size: 0.82em; height: 80px; overflow-y: auto; white-space: pre-wrap;
 }
 
+/* ================= РЕГИСТРЫ И ДАМПЫ ОЗУ ================= */
 .cpu-scroll-area { flex: 1; height: 100%; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .cpu-subcard { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; }
 
@@ -186,9 +197,14 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
 .mem-toolbar-header { display: flex; justify-content: space-between; align-items: center; }
 .dump-view-wide {
     background: #080a0f; border: 1px solid var(--border-color); padding: 10px 12px;
-    border-radius: 6px; font-family: var(--font-mono); font-size: 0.82em; height: 120px; overflow-y: auto; color: #94a3b8; line-height: 1.45; white-space: pre;
+    border-radius: 6px; font-family: var(--font-mono); font-size: 0.82em; height: 130px; overflow-y: auto; color: #94a3b8; line-height: 1.45; white-space: pre;
 }
 
+/* Скроллбары */
+.dump-view-wide::-webkit-scrollbar, .board-scroll-area::-webkit-scrollbar, .cpu-scroll-area::-webkit-scrollbar { width: 6px; height: 6px; }
+.dump-view-wide::-webkit-scrollbar-thumb, .board-scroll-area::-webkit-scrollbar-thumb, .cpu-scroll-area::-webkit-scrollbar-thumb { background: #2b3346; border-radius: 4px; }
+
+/* ================= АДАПТАЦИЯ (ПЛАНШЕТ/ТЕЛЕФОН) ================= */
 @media (max-width: 950px) {
     .nav-screens { display: flex; }
     .slider-viewport { overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; }
