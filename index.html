@@ -8,12 +8,12 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- ШАПКА -->
+        <!-- ЗАКРЕПЛЁННАЯ ВЕРХНЯЯ СТРОКА УПРАВЛЕНИЯ -->
         <header class="toolbar">
             <div class="toolbar-left">
                 <div class="logo">⚡ <span>AVR Studio</span></div>
                 <div class="select-wrapper">
-                    <select id="exampleSelector">
+                    <select id="exampleSelector" onchange="loadSelectedExample()">
                         <option value="empty">📄 Новый чистый файл</option>
                         <option value="sort_ram" selected>Сортировка массива в ОЗУ (0x0100)</option>
                         <option value="btn_counter">Счётчик по кнопкам (K3: +1, K4: -1)</option>
@@ -27,22 +27,23 @@
             </div>
 
             <div class="toolbar-center">
-                <button type="button" id="btnStep" class="btn btn-step" title="Шаг (F11)">
+                <button type="button" id="btnStep" class="btn btn-step" onclick="cpuStep()" title="Шаг (F11)">
                     <span>⏭</span> Шаг
                 </button>
-                <button type="button" id="btnRun" class="btn btn-run" title="Пуск до останова">
+                <button type="button" id="btnRun" class="btn btn-run" onclick="toggleRun()" title="Пуск до останова">
                     <span id="runIcon">▶</span> <span id="runText">Пуск</span>
                 </button>
-                <button type="button" id="btnReset" class="btn btn-reset" title="Сбросить процессор">
+                <button type="button" id="btnReset" class="btn btn-reset" onclick="cpuReset()" title="Сбросить процессор">
                     <span>🔄</span> Сброс
                 </button>
                 
                 <div class="speed-box">
-                    <input type="range" id="speedRange" min="1" max="100" value="40">
+                    <input type="range" id="speedRange" min="1" max="100" value="40" oninput="updateSpeed(this.value)">
                     <span id="speedVal">40 оп/с</span>
                 </div>
             </div>
 
+            <!-- ПЕРЕКЛЮЧАТЕЛИ ЭКРАНОВ ДЛЯ СМАРТФОНОВ -->
             <nav class="nav-screens">
                 <button type="button" class="nav-screen-btn active" onclick="scrollToSlide(0)">📝 Код</button>
                 <button type="button" class="nav-screen-btn" onclick="scrollToSlide(1)">💡 Плата</button>
@@ -50,7 +51,7 @@
             </nav>
         </header>
 
-        <!-- ПОДСКАЗКА -->
+        <!-- ПЛАШКА-ПОДСКАЗКА -->
         <div class="hint-banner" id="hintBanner">
             <span class="hint-icon">💡</span>
             <div class="hint-text" id="hintText">Инструкция к выбранной программе...</div>
@@ -60,12 +61,12 @@
         <main class="slider-viewport" id="sliderViewport">
             <div class="slider-track">
                 
-                <!-- РЕДАКТОР -->
+                <!-- ПАНЕЛЬ 1: РЕДАКТОР КОДА -->
                 <section class="slide-panel editor-slide">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <h2>📝 Редактор ассемблера (.asm)</h2>
-                            <button type="button" id="btnClearCode" class="btn-clear-code" title="Очистить код">🗑️ Очистить</button>
+                            <button type="button" class="btn-clear-code" onclick="clearEditor()" title="Очистить код">🗑️ Очистить</button>
                         </div>
                         <div class="editor-status">
                             <span id="compilerStatus">Готов</span>
@@ -73,6 +74,7 @@
                         </div>
                     </div>
                     <div class="editor-wrapper">
+                        <!-- Колонка номеров строк с поддержкой точек останова 🔴 и стрелки PC ▶ -->
                         <div class="line-gutter" id="lineGutter"></div>
                         <div class="editor-container">
                             <pre id="highlighting" aria-hidden="true"><code id="highlightingContent"></code></pre>
@@ -81,28 +83,30 @@
                     </div>
                 </section>
 
-                <!-- ПЛАТА -->
+                <!-- ПАНЕЛЬ 2: ПЛАТА -->
                 <section class="slide-panel board-slide">
                     <div class="slide-header">
                         <h2>💡 Интерактивная плата ввода-вывода</h2>
                         <small style="color:var(--text-muted);">Кнопки с фиксацией</small>
                     </div>
                     <div class="board-scroll-area">
+                        <!-- Кнопки K1..K8 -->
                         <div class="board-card">
                             <div class="card-title">Кнопочный модуль с фиксацией (K1..K8)</div>
                             <p class="board-note">Кликните кнопку, чтобы зажать (0 на входе). Кликните повторно, чтобы отжать (1).</p>
                             <div class="btn-matrix">
-                                <button type="button" class="v-btn" id="vbtn_K1">K1 <span>PD2</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K2">K2 <span>PD3</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K3">K3 <span>PB0</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K4">K4 <span>PB1</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K5">K5 <span>PB2</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K6">K6 <span>PB3</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K7">K7 <span>PB4</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K8">K8 <span>PB5</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K1" onclick="toggleVButton('K1')">K1 <span>PD2</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K2" onclick="toggleVButton('K2')">K2 <span>PD3</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K3" onclick="toggleVButton('K3')">K3 <span>PB0</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K4" onclick="toggleVButton('K4')">K4 <span>PB1</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K5" onclick="toggleVButton('K5')">K5 <span>PB2</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K6" onclick="toggleVButton('K6')">K6 <span>PB3</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K7" onclick="toggleVButton('K7')">K7 <span>PB4</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K8" onclick="toggleVButton('K8')">K8 <span>PB5</span></button>
                             </div>
                         </div>
 
+                        <!-- Светодиод L -->
                         <div class="board-card uno-led-card">
                             <div class="card-title">Светодиод платы [L] (Вывод PB5 / Pin 13)</div>
                             <div class="single-led">
@@ -111,6 +115,7 @@
                             </div>
                         </div>
 
+                        <!-- Линейка светодиодов -->
                         <div class="board-card">
                             <div class="port-header-row">
                                 <div class="card-title" id="ledPortTitle">Линейка светодиодов (Порт D)</div>
@@ -132,6 +137,7 @@
                             </div>
                         </div>
 
+                        <!-- Терминал UART -->
                         <div class="board-card uart-card">
                             <div class="uart-header">
                                 <div class="card-title">Терминал UART (UDR0)</div>
@@ -142,7 +148,7 @@
                     </div>
                 </section>
 
-                <!-- ПРОЦЕССОР И ПАМЯТЬ -->
+                <!-- ПАНЕЛЬ 3: РЕГИСТРЫ И ДАМПЫ -->
                 <section class="slide-panel cpu-slide">
                     <div class="slide-header">
                         <h2>⚙️ Регистры и память</h2>
@@ -166,6 +172,7 @@
                             <div class="registers-grid" id="registersGrid"></div>
                         </div>
 
+                        <!-- ПРОСТОРНЫЙ ДАМП ПАМЯТИ С ВКЛАДКАМИ -->
                         <div class="cpu-subcard mem-card-expanded">
                             <div class="mem-toolbar-header">
                                 <div class="port-selector-btns">
@@ -186,6 +193,7 @@
         </main>
     </div>
 
-    <script type="module" src="main.js"></script>
+    <!-- ВАЖНО: Обычное подключение (БЕЗ type="module") -->
+    <script src="script.js"></script>
 </body>
 </html>
