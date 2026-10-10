@@ -451,13 +451,4 @@ export function cpuStep(onUpdateCallback, onHaltCallback) {
 
     cpu.pc = nextPC;
     cpu.cycles++;
-
-    onUpdateCallback();
-
-    if (cpu.running && cpu.pc < cpu.program.length) {
-        if (cpu.breakpoints.has(cpu.program[cpu.pc].lineNum)) {
-            onHaltCallback();
-            onUpdateCallback();
-        }
-    }
 }
