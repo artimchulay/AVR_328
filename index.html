@@ -15,23 +15,23 @@
                 <div class="select-wrapper">
                     <select id="exampleSelector" onchange="loadSelectedExample()">
                         <option value="empty">📄 Новый чистый файл</option>
-                        <!-- Лабораторная работа 4 (Си) -->
-                        <option value="c_zadanie5" selected>⚡ Си (ЛР 4): Задание 5 — Кнопки PD2..PD4 и LED триггеры</option>
-                        <option value="c_zadanie2">⚡ Си (ЛР 4): Задание 2 — Маятник PD6..PD7</option>
-                        <option value="c_example2">⚡ Си (ЛР 4): Пример 2 — Мигание L (PB5) через счётчик</option>
-                        <option value="c_example3">⚡ Си (ЛР 4): Пример 3 — Опрос кнопки PB0 и светодиод L</option>
-                        <!-- Лабораторные работы 1-3 (Ассемблер) -->
-                        <option value="example1_lab1">📝 Ассемблер (ЛР 1): Пересылка данных и Стек (Example 1)</option>
-                        <option value="example2_lab2">📝 Ассемблер (ЛР 2): Логика, BST/BLD, SEI/CLI (Example 2.1)</option>
-                        <option value="example4_lab3">📝 Ассемблер (ЛР 3): Массивы и SUBI -3 (Example 4)</option>
-                        <option value="button_led_lab4">📝 Ассемблер (ЛР 4): Кнопка PB0 и светодиод PB5</option>
-                        <!-- Интерактивные демонстрации -->
-                        <option value="sort_ram">Сортировка массива в ОЗУ (0x0100)</option>
-                        <option value="btn_counter">Счётчик по кнопкам (K4: +1, K5: -1)</option>
-                        <option value="led_blink">Бегущий огонёк (Порт D)</option>
-                        <option value="fibonacci">Числа Фибоначчи в памяти</option>
-                        <option value="uart_tx">Отправка текста в терминал (UART)</option>
-                        <option value="test_all">Комплексный тест: команды и флаги SREG</option>
+                        <!-- Программы на Си -->
+                        <option value="c_zadanie5">⚡ Си: Кнопки-переключатели светодиодов (PD2..PD4)</option>
+                        <option value="c_zadanie2">⚡ Си: Бегущий маятник (PD6, PD7)</option>
+                        <option value="c_example2">⚡ Си: Мигающий светодиод L через счётчик</option>
+                        <option value="c_example3">⚡ Си: Кнопка включает светодиод L</option>
+                        <!-- Программы на Ассемблере -->
+                        <option value="sort_ram" selected>📝 Сортировка массива в ОЗУ (0x0100)</option>
+                        <option value="button_led">📝 Кнопка включает светодиод L (PB5)</option>
+                        <option value="btn_counter">📝 Счётчик по кнопкам (K4: +1, K5: -1)</option>
+                        <option value="led_blink">📝 Бегущий огонёк (Порт D)</option>
+                        <option value="fibonacci">📝 Числа Фибоначчи в памяти</option>
+                        <option value="uart_tx">📝 Отправка текста в терминал (UART)</option>
+                        <option value="example1_lab1">📝 Пересылка данных и стек (PUSH / POP)</option>
+                        <option value="example2_lab2">📝 Логические операции и флаги</option>
+                        <option value="example4_lab3">📝 Заполнение трёх массивов в ОЗУ</option>
+                        <option value="alu_flags">📝 Арифметика и флаги переполнения</option>
+                        <option value="test_all">📝 Комплексный тест: все команды и флаги SREG</option>
                     </select>
                 </div>
             </div>
@@ -74,11 +74,10 @@
                 <section class="slide-panel editor-slide">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2 id="editorTitle">⚡ Редактор кода</h2>
-                            <!-- ПЕРЕКЛЮЧАТЕЛЬ ЯЗЫКА -->
+                            <h2 id="editorTitle">📝 Редактор кода</h2>
                             <div class="lang-switch-btns">
-                                <button type="button" class="lang-btn" id="btnLangAsm" onclick="setEditorLang('asm')">ASM</button>
-                                <button type="button" class="lang-btn active" id="btnLangC" onclick="setEditorLang('c')">C (Си)</button>
+                                <button type="button" class="lang-btn active" id="btnLangAsm" onclick="setEditorLang('asm')">ASM</button>
+                                <button type="button" class="lang-btn" id="btnLangC" onclick="setEditorLang('c')">C (Си)</button>
                             </div>
                             <button type="button" class="btn-clear-code" onclick="clearEditor()" title="Очистить код">🗑️</button>
                         </div>
@@ -103,7 +102,6 @@
                         <small style="color:var(--text-muted);">Кнопки с фиксацией</small>
                     </div>
                     <div class="board-scroll-area">
-                        <!-- КНОПКИ K1..K8 (ПОЛНОЕ СООТВЕТСТВИЕ ЛР 4) -->
                         <div class="board-card">
                             <div class="card-title">Кнопочный модуль с фиксацией (K1..K8)</div>
                             <p class="board-note">Кликните кнопку, чтобы зажать (0 на входе). Кликните повторно, чтобы отжать (1).</p>
@@ -119,7 +117,6 @@
                             </div>
                         </div>
 
-                        <!-- СВЕТОДИОД L -->
                         <div class="board-card uno-led-card">
                             <div class="card-title">Светодиод платы [L] (Вывод PB5 / Pin 13)</div>
                             <div class="single-led">
@@ -128,7 +125,6 @@
                             </div>
                         </div>
 
-                        <!-- ЛИНЕЙКА СВЕТОДИОДОВ -->
                         <div class="board-card">
                             <div class="port-header-row">
                                 <div class="card-title" id="ledPortTitle">Линейка светодиодов (Порт D)</div>
@@ -150,7 +146,6 @@
                             </div>
                         </div>
 
-                        <!-- ТЕРМИНАЛ UART -->
                         <div class="board-card uart-card">
                             <div class="uart-header">
                                 <div class="card-title">Терминал UART (UDR0)</div>
@@ -185,7 +180,6 @@
                             <div class="registers-grid" id="registersGrid"></div>
                         </div>
 
-                        <!-- ВКЛАДКИ ОЗУ И СТЕКА (ОРИГИНАЛЬНЫЙ ВИД) -->
                         <div class="cpu-subcard mem-card-expanded">
                             <div class="mem-toolbar-header">
                                 <div class="port-selector-btns">
