@@ -11,7 +11,6 @@
     --accent-gold: #ffb300;
     --accent-red: #ff3d00;
     
-    /* Цвета подсветки кода */
     --syn-op: #38bdf8;
     --syn-com: #4ade80;
     --syn-lbl: #fb923c;
@@ -105,7 +104,7 @@ html, body {
 .btn-clear-code:hover { color: #fff; border-color: #fff; }
 .editor-status { font-size: 0.78em; color: var(--text-muted); display: flex; gap: 10px; }
 
-/* 3. РЕДАКТОР С ТОЧНЫМ НАЛОЖЕНИЕМ */
+/* 3. РЕДАКТОР КОДА */
 .editor-wrapper { flex: 1; display: flex; height: 100%; min-height: 0; background: #080a0f; position: relative; overflow: hidden; }
 .line-gutter {
     width: 48px; height: 100%; padding: 10px 0; background: #06070a; border-right: 1px solid #1a1e28;
