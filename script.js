@@ -1464,27 +1464,123 @@ function clearEditor() {
     cpuReset();
 }
 
-/* ================= ПРОГРАММАТОР ================= */
+/* ================= ГЛАВА: CPU-Z & ПРОГРАММАТОР ================= */
+
+// База чипов по аппаратной сигнатуре кремния
+const AVR_CHIP_DATABASE = {
+    '1e950f': { name: 'ATmega328P', flash: 32768, sram: 2048, eeprom: 1024, pkg: 'DIP-28 / TQFP-32', mips: '16 MIPS @ 16MHz' },
+    '1e9801': { name: 'ATmega2560', flash: 262144, sram: 8192, eeprom: 4096, pkg: '100-pin TQFP', mips: '16 MIPS @ 16MHz' },
+    '1e9587': { name: 'ATmega32U4', flash: 32768, sram: 2560, eeprom: 1024, pkg: '44-pin TQFP', mips: '16 MIPS @ 16MHz' },
+    '1e9406': { name: 'ATmega168',  flash: 16384, sram: 1024, eeprom: 512,  pkg: 'DIP-28 / TQFP-32', mips: '16 MIPS @ 16MHz' }
+};
+
+// База USB-мостов по Vendor ID
+const USB_BRIDGES = {
+    '2341': 'Оригинальный чип Arduino (ATmega16U2)',
+    '1a86': 'WCH CH340G / CH341 (USB-UART мост)',
+    '0403': 'FTDI FT232R (USB-Serial)',
+    '10c4': 'Silicon Labs CP2102'
+};
+
+function switchCpuzTab(tabName) {
+    document.querySelectorAll('.cpuz-tab').forEach((t, i) => {
+        t.classList.toggle('active', ['cpu','mem','board'][i] === tabName);
+    });
+    document.querySelectorAll('.cpuz-page').forEach(p => p.classList.remove('active'));
+    document.getElementById(`cpuzPage_${tabName}`)?.classList.add('active');
+}
+
+function updateTelemetry() {
+    let usedFlash = cpu.program.length * 2;
+    let freeSram = Math.max(0, 0x08FF - cpu.sp);
+    let sramPercent = Math.max(0, 100 - Math.round(freeSram / 20.48));
+
+    // Обновление CPU-Z
+    const flashUsed = document.getElementById('cpuzFlashUsed');
+    if (flashUsed) flashUsed.textContent = `${usedFlash} Байт (${Math.round(usedFlash / 327.68)}%)`;
+
+    const flashBar = document.getElementById('cpuzFlashBar');
+    if (flashBar) flashBar.style.width = Math.min(100, Math.max(1, Math.round(usedFlash / 327.68))) + '%';
+
+    const sramFree = document.getElementById('cpuzSramFree');
+    if (sramFree) sramFree.textContent = `${2048 - freeSram} Байт (${100 - sramPercent}%)`;
+
+    const sramBar = document.getElementById('cpuzSramBar');
+    if (sramBar) sramBar.style.width = (100 - sramPercent) + '%';
+}
+
+function updateBaudRate(val) {
+    const el = document.getElementById('cpuzBaud');
+    if (el) el.textContent = val + ' бод';
+}
+
+// Подключение реального устройства через браузерный Web Serial API
+let realSerialPort = null;
+
+async function connectRealWebSerial() {
+    if (!('serial' in navigator)) {
+        alert('Web Serial API не поддерживается вашим браузером. Откройте симулятор в Chrome, Edge или Opera на ПК.');
+        return;
+    }
+    try {
+        realSerialPort = await navigator.serial.requestPort();
+        await realSerialPort.open({ baudRate: 9600 });
+
+        // Считываем физический USB Vendor ID и Product ID
+        const info = realSerialPort.getInfo();
+        const vidHex = info.usbVendorId ? info.usbVendorId.toString(16).padStart(4, '0').toLowerCase() : '2341';
+        const pidHex = info.usbProductId ? info.usbProductId.toString(16).padStart(4, '0').toLowerCase() : '0043';
+
+        // Определяем модель моста и плату
+        const bridgeName = USB_BRIDGES[vidHex] || 'USB-Serial Мост';
+        let detectedBoard = 'Arduino Совместимая Плата';
+        if (vidHex === '2341') detectedBoard = 'Arduino Uno R3 (Оригинал)';
+        else if (vidHex === '1a86') detectedBoard = 'Arduino Uno / Nano (CH340 Клон)';
+
+        // Отображаем живые ТТХ в CPU-Z!
+        document.getElementById('cpuzBoardModel').textContent = detectedBoard;
+        document.getElementById('cpuzBridge').textContent = bridgeName;
+        document.getElementById('cpuzVid').textContent = '0x' + vidHex.toUpperCase();
+        document.getElementById('cpuzPid').textContent = '0x' + pidHex.toUpperCase();
+
+        const badge = document.getElementById('usbStatusBadge');
+        if (badge) {
+            badge.textContent = `🟢 USB: Подключено (0x${vidHex.toUpperCase()})`;
+            badge.style.background = 'rgba(34, 197, 94, 0.12)';
+            badge.style.color = '#22c55e';
+            badge.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+        }
+
+        appendSerialLog('system', `[Аппаратный USB-C]: Обнаружена плата ${detectedBoard}! VID: 0x${vidHex}, PID: 0x${pidHex}`);
+    } catch (err) {
+        appendSerialLog('system', '[USB Отмена]: Устройство не выбрано.');
+    }
+}
 
 function flashFirmware() {
     const btn = document.getElementById('btnFlashMcu');
     const bar = document.getElementById('flashProgress');
     btn.disabled = true;
+    appendSerialLog('system', '[AVRDUDE]: Инициализация программатора...');
 
     let progress = 0;
     bar.style.width = '0%';
 
     const timer = setInterval(() => {
-        progress += 20;
+        progress += 25;
         bar.style.width = progress + '%';
+
+        if (progress === 50) appendSerialLog('system', '[AVRDUDE]: Чтение Device Signature -> 0x1E 0x95 0x0F (OK)');
+        if (progress === 75) appendSerialLog('system', '[AVRDUDE]: Запись Flash памяти...');
 
         if (progress >= 100) {
             clearInterval(timer);
             btn.disabled = false;
+            appendSerialLog('system', '[AVRDUDE]: 100% верифицировано! МК перезапущен.');
             cpuReset();
             setTimeout(() => { bar.style.width = '0%'; }, 1500);
         }
-    }, 150);
+    }, 120);
 }
 
 function sendSerialData() {
@@ -1493,39 +1589,23 @@ function sendSerialData() {
     const msg = inp.value;
     inp.value = '';
 
-    const term = document.getElementById('serialTerminalWindow');
-    if (term) {
-        const line = document.createElement('div');
-        line.className = 'serial-line tx';
-        line.textContent = `[${new Date().toLocaleTimeString()}] ПК ➔ МК: "${msg}"`;
-        term.appendChild(line);
-        term.scrollTop = term.scrollHeight;
-    }
-
+    appendSerialLog('tx', `ПК ➔ МК: "${msg}"`);
     writeRAM(IO.UDR0, msg.charCodeAt(0));
+}
+
+function appendSerialLog(type, text) {
+    const term = document.getElementById('serialTerminalWindow');
+    if (!term) return;
+    const line = document.createElement('div');
+    line.className = `serial-line ${type}`;
+    line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+    term.appendChild(line);
+    term.scrollTop = term.scrollHeight;
 }
 
 function clearSerialLog() {
     const term = document.getElementById('serialTerminalWindow');
     if (term) term.innerHTML = '<div class="serial-line system">[Терминал очищен]</div>';
-}
-
-async function connectRealWebSerial() {
-    if (!('serial' in navigator)) {
-        alert('Web Serial API не поддерживается вашим браузером. Откройте симулятор в Chrome, Edge или Opera.');
-        return;
-    }
-    try {
-        const port = await navigator.serial.requestPort();
-        await port.open({ baudRate: 9600 });
-        const badge = document.getElementById('usbStatusBadge');
-        if (badge) {
-            badge.textContent = '🟢 USB-C: Подключено (COM)';
-            badge.style.background = 'rgba(34, 197, 94, 0.12)';
-            badge.style.color = '#22c55e';
-            badge.style.borderColor = 'rgba(34, 197, 94, 0.3)';
-        }
-    } catch (err) {}
 }
 
 /* ================= БАЗА ПРОГРАММ ================= */
