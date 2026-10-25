@@ -2,48 +2,42 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AVR ATmega328P Web Simulator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=0.5, maximum-scale=3.0, user-scalable=yes">
+    <title>AVR ATmega328P Studio & Logic Analyzer</title>
+    <!-- Векторная иконка микросхемы AVR -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect x='14' y='14' width='36' height='36' rx='4' fill='%231e293b' stroke='%2300e676' stroke-width='2'/%3E%3Ccircle cx='20' cy='20' r='2' fill='%2300e676'/%3E%3Ctext x='32' y='36' font-size='10' font-family='monospace' font-weight='bold' fill='%23f1f5f9' text-anchor='middle'%3EAVR%3C/text%3E%3Cpath d='M6 22h8M6 32h8M6 42h8M50 22h8M50 32h8M50 42h8M22 6v8M32 6v8M42 6v8M22 50v8M32 50v8M42 50v8' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="app-container">
-        <!-- ВЕРХНЯЯ СТРОКА УПРАВЛЕНИЯ -->
+        <!-- ШАПКА УПРАВЛЕНИЯ -->
         <header class="toolbar">
             <div class="toolbar-left">
                 <div class="logo">⚡ <span>AVR Studio</span></div>
                 <div class="select-wrapper">
                     <select id="exampleSelector" onchange="loadSelectedExample()">
-                        <option value="empty">📄 Новый чистый файл</option>
-                        <!-- Программы на Си -->
-                        <option value="c_zadanie5">⚡ Си: Кнопки-переключатели светодиодов (PD2..PD4)</option>
-                        <option value="c_zadanie2">⚡ Си: Бегущий маятник (PD6, PD7)</option>
-                        <option value="c_example2">⚡ Си: Мигающий светодиод L через счётчик</option>
-                        <option value="c_example3">⚡ Си: Кнопка включает светодиод L</option>
-                        <!-- Программы на Ассемблере -->
-                        <option value="sort_ram" selected>📝 Сортировка массива в ОЗУ (0x0100)</option>
-                        <option value="button_led">📝 Кнопка включает светодиод L (PB5)</option>
-                        <option value="btn_counter">📝 Счётчик по кнопкам (K4: +1, K5: -1)</option>
-                        <option value="led_blink">📝 Бегущий огонёк (Порт D)</option>
-                        <option value="fibonacci">📝 Числа Фибоначчи в памяти</option>
-                        <option value="uart_tx">📝 Отправка текста в терминал (UART)</option>
-                        <option value="example1_lab1">📝 Пересылка данных и стек (PUSH / POP)</option>
-                        <option value="example2_lab2">📝 Логические операции и флаги</option>
-                        <option value="example4_lab3">📝 Заполнение трёх массивов в ОЗУ</option>
-                        <option value="alu_flags">📝 Арифметика и флаги переполнения</option>
-                        <option value="test_all">📝 Комплексный тест: все команды и флаги SREG</option>
+                        <!-- Программы на C -->
+                        <option value="c_interrupt_int0">⚡ C: Внешнее прерывание INT0 (Кнопка K1)</option>
+                        <option value="c_blink_counter">⚡ C: Мигающий светодиод L (Счетчик 800 000)</option>
+                        <option value="c_zadanie5">⚡ C: Кнопки-переключатели светодиодов (PD2..PD4)</option>
+                        <option value="c_example3">⚡ C: Кнопка включает светодиод L</option>
+                        <!-- Программы на ASM -->
+                        <option value="test_all" selected>📝 ASM: Комплексный тест: команды и флаги SREG</option>
+                        <option value="led_running">📝 ASM: Бегущий огонёк (Порт D)</option>
+                        <option value="uart_tx">📝 ASM: Отправка текста в терминал (UART)</option>
+                        <option value="sort_ram">📝 ASM: Сортировка массива в ОЗУ (0x0100)</option>
                     </select>
                 </div>
             </div>
 
             <div class="toolbar-center">
-                <button type="button" id="btnStep" class="btn btn-step" onclick="cpuStep()" title="Шаг (F11)">
+                <button type="button" id="btnStep" class="btn btn-step" onclick="cpuStep()" title="Один шаг (F11)">
                     <span>⏭</span> Шаг
                 </button>
-                <button type="button" id="btnRun" class="btn btn-run" onclick="toggleRun()" title="Пуск до останова">
+                <button type="button" id="btnRun" class="btn btn-run" onclick="toggleRun()" title="Пуск / Пауза">
                     <span id="runIcon">▶</span> <span id="runText">Пуск</span>
                 </button>
-                <button type="button" id="btnReset" class="btn btn-reset" onclick="cpuReset()" title="Сбросить процессор">
+                <button type="button" id="btnReset" class="btn btn-reset" onclick="cpuReset()" title="Сброс процессора">
                     <span>🔄</span> Сброс
                 </button>
                 
@@ -53,14 +47,17 @@
                 </div>
             </div>
 
-            <nav class="nav-screens">
-                <button type="button" class="nav-screen-btn active" onclick="scrollToSlide(0)">📝 Код</button>
-                <button type="button" class="nav-screen-btn" onclick="scrollToSlide(1)">💡 Плата</button>
-                <button type="button" class="nav-screen-btn" onclick="scrollToSlide(2)">⚙️ Процессор</button>
+            <!-- ВКЛАДКИ -->
+            <nav class="nav-screens" id="panelNav">
+                <button type="button" class="nav-screen-btn active" id="tabBtn_editor" onclick="togglePanel('editor')">📝 Код</button>
+                <button type="button" class="nav-screen-btn" id="tabBtn_board" onclick="togglePanel('board')">💡 Плата</button>
+                <button type="button" class="nav-screen-btn active" id="tabBtn_analyzer" onclick="togglePanel('analyzer')">📊 Анализатор</button>
+                <button type="button" class="nav-screen-btn active" id="tabBtn_prog" onclick="togglePanel('prog')">🔌 Программатор</button>
+                <button type="button" class="nav-screen-btn" id="tabBtn_cpu" onclick="togglePanel('cpu')">⚙️ Процессор</button>
             </nav>
         </header>
 
-        <!-- ПЛАШКА-ПОДСКАЗКА -->
+        <!-- ПОДСКАЗКА -->
         <div class="hint-banner" id="hintBanner">
             <span class="hint-icon">💡</span>
             <div class="hint-text" id="hintText">Инструкция к выбранной программе...</div>
@@ -68,16 +65,21 @@
 
         <!-- ОСНОВНАЯ ЗОНА -->
         <main class="slider-viewport" id="sliderViewport">
-            <div class="slider-track">
+            <div class="slider-track" id="panelsTrack">
                 
                 <!-- ПАНЕЛЬ 1: РЕДАКТОР КОДА -->
-                <section class="slide-panel editor-slide">
+                <section class="slide-panel editor-slide" id="panel_editor">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:8px;">
                             <h2 id="editorTitle">📝 Редактор кода</h2>
                             <div class="lang-switch-btns">
                                 <button type="button" class="lang-btn active" id="btnLangAsm" onclick="setEditorLang('asm')">ASM</button>
-                                <button type="button" class="lang-btn" id="btnLangC" onclick="setEditorLang('c')">C (Си)</button>
+                                <button type="button" class="lang-btn" id="btnLangC" onclick="setEditorLang('c')">C</button>
+                            </div>
+                            <div class="font-size-btns">
+                                <button type="button" class="btn-icon" onclick="changeFontSize(-1)" title="Уменьшить шрифт">A-</button>
+                                <span id="fontSizeVal" style="font-size:0.75em; color:var(--text-muted); min-width:24px; text-align:center;">14px</span>
+                                <button type="button" class="btn-icon" onclick="changeFontSize(1)" title="Увеличить шрифт">A+</button>
                             </div>
                             <button type="button" class="btn-clear-code" onclick="clearEditor()" title="Очистить код">🗑️</button>
                         </div>
@@ -90,24 +92,24 @@
                         <div class="line-gutter" id="lineGutter"></div>
                         <div class="editor-container">
                             <pre id="highlighting" aria-hidden="true"><code id="highlightingContent"></code></pre>
-                            <textarea id="asmCode" spellcheck="false" placeholder="Пишите код здесь..."></textarea>
+                            <textarea id="asmCode" wrap="off" autocapitalize="off" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Пишите код здесь..."></textarea>
                         </div>
                     </div>
                 </section>
 
-                <!-- ПАНЕЛЬ 2: ПЛАТА -->
-                <section class="slide-panel board-slide">
+                <!-- ПАНЕЛЬ 2: ИНТЕРАКТИВНАЯ ПЛАТА -->
+                <section class="slide-panel board-slide panel-hidden" id="panel_board">
                     <div class="slide-header">
                         <h2>💡 Интерактивная плата ввода-вывода</h2>
                         <small style="color:var(--text-muted);">Кнопки с фиксацией</small>
                     </div>
                     <div class="board-scroll-area">
                         <div class="board-card">
-                            <div class="card-title">Кнопочный модуль с фиксацией (K1..K8)</div>
-                            <p class="board-note">Кликните кнопку, чтобы зажать (0 на входе). Кликните повторно, чтобы отжать (1).</p>
+                            <div class="card-title">Кнопочный модуль (Прерывания INT0, INT1, PCINT)</div>
+                            <p class="board-note">Клик — зажать кнопку (лог. 0). Повторный клик — отжать (лог. 1).</p>
                             <div class="btn-matrix">
-                                <button type="button" class="v-btn" id="vbtn_K1" onclick="toggleVButton('K1')">K1 <span>PD2</span></button>
-                                <button type="button" class="v-btn" id="vbtn_K2" onclick="toggleVButton('K2')">K2 <span>PD3</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K1" onclick="toggleVButton('K1')">K1 <span>PD2 (INT0)</span></button>
+                                <button type="button" class="v-btn" id="vbtn_K2" onclick="toggleVButton('K2')">K2 <span>PD3 (INT1)</span></button>
                                 <button type="button" class="v-btn" id="vbtn_K3" onclick="toggleVButton('K3')">K3 <span>PD4</span></button>
                                 <button type="button" class="v-btn" id="vbtn_K4" onclick="toggleVButton('K4')">K4 <span>PB0</span></button>
                                 <button type="button" class="v-btn" id="vbtn_K5" onclick="toggleVButton('K5')">K5 <span>PB1</span></button>
@@ -118,10 +120,20 @@
                         </div>
 
                         <div class="board-card uno-led-card">
-                            <div class="card-title">Светодиод платы [L] (Вывод PB5 / Pin 13)</div>
-                            <div class="single-led">
-                                <div class="led-light" id="ledPB5"></div>
-                                <span class="led-label">PB5</span>
+                            <div class="card-title">Светодиоды платы [L, TX, RX]</div>
+                            <div class="board-leds-row" style="display:flex; gap:16px; align-items:center;">
+                                <div class="single-led">
+                                    <div class="led-light" id="ledPB5"></div>
+                                    <span class="led-label">L (PB5)</span>
+                                </div>
+                                <div class="single-led">
+                                    <div class="led-light" id="ledTX"></div>
+                                    <span class="led-label">TX (PD1)</span>
+                                </div>
+                                <div class="single-led">
+                                    <div class="led-light" id="ledRX"></div>
+                                    <span class="led-label">RX (PD0)</span>
+                                </div>
                             </div>
                         </div>
 
@@ -156,10 +168,125 @@
                     </div>
                 </section>
 
-                <!-- ПАНЕЛЬ 3: РЕГИСТРЫ И ДАМПЫ -->
-                <section class="slide-panel cpu-slide">
+                <!-- ПАНЕЛЬ 3: ЛОГИЧЕСКИЙ АНАЛИЗАТОР -->
+                <section class="slide-panel analyzer-slide" id="panel_analyzer">
                     <div class="slide-header">
-                        <h2>⚙️ Регистры и память</h2>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <h2>📊 Анализатор сигналов</h2>
+                            <div class="quick-ch-btns">
+                                <button type="button" class="btn-mini" onclick="selectChannelPreset('d')">Все D</button>
+                                <button type="button" class="btn-mini" onclick="selectChannelPreset('b')">Все B</button>
+                                <button type="button" class="btn-mini" onclick="selectChannelPreset('c')">Все C</button>
+                                <button type="button" class="btn-mini" onclick="selectChannelPreset('all')">Все 20</button>
+                            </div>
+                        </div>
+                        <div class="analyzer-controls">
+                            <button type="button" class="btn-icon" id="btnAnalyzerCapture" onclick="toggleAnalyzerCapture()" title="Старт/Стоп">🔴 Запись</button>
+                            <button type="button" class="btn-icon" onclick="clearAnalyzer()" title="Очистить">🗑️</button>
+                            <button type="button" class="btn-icon" onclick="zoomAnalyzer(-1)" title="Отдалить">-</button>
+                            <span id="analyzerZoomVal" style="font-size:0.75em; color:var(--text-muted); font-family:var(--font-mono);">1.0x</span>
+                            <button type="button" class="btn-icon" onclick="zoomAnalyzer(1)" title="Приблизить">+</button>
+                        </div>
+                    </div>
+                    <div class="analyzer-body">
+                        <div class="analyzer-channel-selector" id="analyzerChannelSelector"></div>
+                        <div class="canvas-scroll-wrapper" id="canvasWrapper">
+                            <canvas id="logicCanvas"></canvas>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ПАНЕЛЬ 4: ПРОГРАММАТОР И USB-C -->
+                <section class="slide-panel prog-slide" id="panel_prog">
+                    <div class="slide-header">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <h2>🔌 Программатор & USB-C</h2>
+                            <span class="usb-status-tag" id="usbStatusBadge" style="background:rgba(239,68,68,0.12); color:#ef4444; border-color:rgba(239,68,68,0.3);">🔴 USB-C: Отключено</span>
+                        </div>
+                        <button type="button" class="btn-mini" onclick="connectRealWebSerial()" title="Реальный USB порт">🌐 Реальный USB</button>
+                    </div>
+                    <div class="prog-scroll-area">
+                        <div class="telemetry-grid">
+                            <div class="telem-card">
+                                <span class="telem-label">Питание VCC</span>
+                                <b class="telem-val" style="color:#22c55e;">5.01 V</b>
+                            </div>
+                            <div class="telem-card">
+                                <span class="telem-label">Частота F_CPU</span>
+                                <b class="telem-val" style="color:#38bdf8;">16.000 MHz</b>
+                            </div>
+                            <div class="telem-card">
+                                <span class="telem-label">Память Flash</span>
+                                <b class="telem-val" id="telemFlash">128 / 32256 B</b>
+                            </div>
+                            <div class="telem-card">
+                                <span class="telem-label">Свободно SRAM</span>
+                                <b class="telem-val" id="telemSram">2048 B (100%)</b>
+                            </div>
+                            <div class="telem-card">
+                                <span class="telem-label">Сигнатура чипа</span>
+                                <b class="telem-val" style="color:#eab308;">0x1E 0x95 0x0F</b>
+                            </div>
+                            <div class="telem-card">
+                                <span class="telem-label">Fuse-биты</span>
+                                <b class="telem-val">L:FF H:DE E:FD</b>
+                            </div>
+                        </div>
+
+                        <div class="usb-hub-card">
+                            <div class="usb-cable-visual">
+                                <div class="usb-plug-box">💻 ПК / Браузер</div>
+                                <div class="usb-wire">
+                                    <div class="wire-pulse pulse-tx" id="wirePulseTx"></div>
+                                    <div class="wire-pulse pulse-rx" id="wirePulseRx"></div>
+                                    <span class="wire-label">USB-C Cable (Full-Duplex)</span>
+                                </div>
+                                <div class="usb-plug-box mcu-plug">
+                                    <span>⚡ ATmega328P</span>
+                                    <div class="wire-leds">
+                                        <span class="w-led" id="wLedTx">TX</span>
+                                        <span class="w-led" id="wLedRx">RX</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flasher-bar">
+                                <button type="button" class="btn btn-flash" id="btnFlashMcu" onclick="flashFirmware()">
+                                    <span>⚡</span> Загрузить прошивку в МК (AVRDUDE)
+                                </button>
+                                <div class="flash-progress-bar">
+                                    <div class="flash-progress-fill" id="flashProgress"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="serial-monitor-card">
+                            <div class="serial-monitor-header">
+                                <span>Монитор порта (Двусторонняя связь)</span>
+                                <div class="serial-baud-select">
+                                    <label>Бод:</label>
+                                    <select id="serialBaud">
+                                        <option value="9600" selected>9600</option>
+                                        <option value="115200">115200</option>
+                                    </select>
+                                    <button type="button" class="btn-link" onclick="clearSerialLog()">Очистить</button>
+                                </div>
+                            </div>
+                            <div class="serial-terminal-window" id="serialTerminalWindow">
+                                <div class="serial-line system">[Система]: Ожидание подключения по USB-C...</div>
+                            </div>
+                            <div class="serial-send-row">
+                                <input type="text" id="serialInput" placeholder="Введите команду в МК..." onkeydown="if(event.key==='Enter') sendSerialData()">
+                                <button type="button" class="btn btn-step" onclick="sendSerialData()">Отправить ➔</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- ПАНЕЛЬ 5: РЕГИСТРЫ И ДАМП -->
+                <section class="slide-panel cpu-slide panel-hidden" id="panel_cpu">
+                    <div class="slide-header">
+                        <h2>⚙️ Регистры процессора и память</h2>
                     </div>
                     <div class="cpu-scroll-area">
                         <div class="cpu-subcard">
