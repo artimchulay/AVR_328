@@ -391,3 +391,94 @@ canvas#logicCanvas { display: block; }
     .slider-track { flex-direction: column; overflow-y: auto; }
     .slide-panel { min-height: 380px; flex: none; width: 100%; }
 }
+/* ================= СТИЛИ В СТИЛЕ CPU-Z ================= */
+.cpuz-window {
+    background: #0d1117;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.cpuz-tabs {
+    display: flex;
+    background: #161b22;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cpuz-tab {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.76em;
+    font-weight: 700;
+    padding: 7px 4px;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s ease;
+}
+
+.cpuz-tab:hover { color: #fff; }
+.cpuz-tab.active {
+    color: var(--accent-blue);
+    border-bottom-color: var(--accent-blue);
+    background: rgba(41, 121, 255, 0.08);
+}
+
+.cpuz-page { display: none; padding: 10px; flex-direction: column; gap: 8px; }
+.cpuz-page.active { display: flex; }
+
+.cpuz-group {
+    background: #141822;
+    border: 1px solid #232b3e;
+    border-radius: 6px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.cpuz-group-title {
+    font-size: 0.70em;
+    font-weight: 800;
+    color: var(--accent-blue);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 3px;
+    border-bottom: 1px solid #21293a;
+    padding-bottom: 2px;
+}
+
+.cpuz-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78em;
+    font-family: var(--font-mono);
+}
+
+.cpuz-k { color: var(--text-muted); }
+.cpuz-v { color: #fff; font-weight: 600; }
+
+.cpuz-bar-wrapper {
+    width: 100%;
+    height: 6px;
+    background: #080a0f;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 3px;
+    border: 1px solid #2b3346;
+}
+.cpuz-bar-fill { height: 100%; background: var(--accent-blue); transition: width 0.2s ease; }
+
+.flasher-card-modern {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
