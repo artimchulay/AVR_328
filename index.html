@@ -195,77 +195,104 @@
                         </div>
                     </div>
                 </section>
-
-                <!-- ПАНЕЛЬ 4: ПРОГРАММАТОР И USB-C -->
+               <!-- ПАНЕЛЬ 4: CPU-Z & ПРОГРАММАТОР -->
                 <section class="slide-panel prog-slide" id="panel_prog">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2>🔌 Программатор & USB-C</h2>
-                            <span class="usb-status-tag" id="usbStatusBadge" style="background:rgba(239,68,68,0.12); color:#ef4444; border-color:rgba(239,68,68,0.3);">🔴 USB-C: Отключено</span>
+                            <h2>⚡ AVR-Z & Программатор</h2>
+                            <span class="usb-status-tag" id="usbStatusBadge">🔴 USB: Отключено</span>
                         </div>
-                        <button type="button" class="btn-mini" onclick="connectRealWebSerial()" title="Реальный USB порт">🌐 Реальный USB</button>
+                        <button type="button" class="btn-mini btn-usb-connect" id="btnConnectRealUsb" onclick="connectRealWebSerial()">🌐 Подключить реальную плату</button>
                     </div>
+
                     <div class="prog-scroll-area">
-                        <div class="telemetry-grid">
-                            <div class="telem-card">
-                                <span class="telem-label">Питание VCC</span>
-                                <b class="telem-val" style="color:#22c55e;">5.01 V</b>
+                        <!-- СТИЛИЗОВАННОЕ ОКНО CPU-Z -->
+                        <div class="cpuz-window">
+                            <!-- ВКЛАДКИ CPU-Z -->
+                            <div class="cpuz-tabs">
+                                <button type="button" class="cpuz-tab active" onclick="switchCpuzTab('cpu')">Процессор</button>
+                                <button type="button" class="cpuz-tab" onclick="switchCpuzTab('mem')">Память</button>
+                                <button type="button" class="cpuz-tab" onclick="switchCpuzTab('board')">Плата & USB</button>
                             </div>
-                            <div class="telem-card">
-                                <span class="telem-label">Частота F_CPU</span>
-                                <b class="telem-val" style="color:#38bdf8;">16.000 MHz</b>
+
+                            <!-- СТРАНИЦА 1: ПРОЦЕССОР -->
+                            <div class="cpuz-page active" id="cpuzPage_cpu">
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Процессор (Processor)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Название:</span><b class="cpuz-v" id="cpuzMcuName">Atmel ATmega328P</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Архитектура:</span><span class="cpuz-v">AVR 8-bit RISC (Harvard)</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Техпроцесс:</span><span class="cpuz-v">130 nm PicoPower</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Корпус:</span><span class="cpuz-v" id="cpuzPackage">28-pin DIP / 32-lead TQFP</span></div>
+                                </div>
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Частоты и Питание (Clocks & Voltage)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Частота ядра:</span><b class="cpuz-v" style="color:#38bdf8;" id="cpuzFreq">16.000 MHz</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Напряжение VCC:</span><b class="cpuz-v" style="color:#22c55e;" id="cpuzVolt">5.00 V</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Быстродействие:</span><span class="cpuz-v" id="cpuzMips">16 MIPS (1 такт = 62.5 нс)</span></div>
+                                </div>
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Аппаратные ID кремния (Silicon ID)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Сигнатура чипа:</span><b class="cpuz-v" style="color:#f59e0b;" id="cpuzSignature">0x1E 0x95 0x0F</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Fuses (L/H/Ext):</span><span class="cpuz-v" id="cpuzFuses">0xFF / 0xDE / 0xFD</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Lock-биты:</span><span class="cpuz-v">0xFF (Запись/Чтение открыты)</span></div>
+                                </div>
                             </div>
-                            <div class="telem-card">
-                                <span class="telem-label">Память Flash</span>
-                                <b class="telem-val" id="telemFlash">128 / 32256 B</b>
+
+                            <!-- СТРАНИЦА 2: ПАМЯТЬ -->
+                            <div class="cpuz-page" id="cpuzPage_mem">
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Flash (Память программ)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Объем:</span><b class="cpuz-v" id="cpuzFlashTotal">32 768 Байт (32 KB)</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Занято скетчем:</span><span class="cpuz-v" id="cpuzFlashUsed">128 Байт</span></div>
+                                    <div class="cpuz-bar-wrapper"><div class="cpuz-bar-fill" id="cpuzFlashBar" style="width:1%;"></div></div>
+                                </div>
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">SRAM (Оперативная память)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Объем ОЗУ:</span><b class="cpuz-v" id="cpuzSramTotal">2048 Байт (2 KB)</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Свободно:</span><span class="cpuz-v" id="cpuzSramFree">2048 Байт (100%)</span></div>
+                                    <div class="cpuz-bar-wrapper"><div class="cpuz-bar-fill" id="cpuzSramBar" style="width:100%; background:#22c55e;"></div></div>
+                                </div>
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">EEPROM (Энергонезависимая память)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Объем EEPROM:</span><span class="cpuz-v" id="cpuzEeprom">1024 Байт (1 KB)</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Ресурс ячеек:</span><span class="cpuz-v">100 000 циклов перезаписи</span></div>
+                                </div>
                             </div>
-                            <div class="telem-card">
-                                <span class="telem-label">Свободно SRAM</span>
-                                <b class="telem-val" id="telemSram">2048 B (100%)</b>
-                            </div>
-                            <div class="telem-card">
-                                <span class="telem-label">Сигнатура чипа</span>
-                                <b class="telem-val" style="color:#eab308;">0x1E 0x95 0x0F</b>
-                            </div>
-                            <div class="telem-card">
-                                <span class="telem-label">Fuse-биты</span>
-                                <b class="telem-val">L:FF H:DE E:FD</b>
+
+                            <!-- СТРАНИЦА 3: ПЛАТА И USB -->
+                            <div class="cpuz-page" id="cpuzPage_board">
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Аппаратное подключение (USB Bridge)</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Тип платы:</span><b class="cpuz-v" id="cpuzBoardModel">Виртуальный эмулятор Arduino Uno</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">USB-мост (UART):</span><span class="cpuz-v" id="cpuzBridge">CH340G / ATmega16U2</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Vendor ID (VID):</span><span class="cpuz-v" id="cpuzVid">0x2341 (Arduino SA)</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Product ID (PID):</span><span class="cpuz-v" id="cpuzPid">0x0043 (Uno R3)</span></div>
+                                </div>
+                                <div class="cpuz-group">
+                                    <div class="cpuz-group-title">Интерфейс связи</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Режим порта:</span><span class="cpuz-v">Full-Duplex (TX/RX)</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Скорость:</span><span class="cpuz-v" id="cpuzBaud">9600 бод</span></div>
+                                </div>
                             </div>
                         </div>
 
-                        <div class="usb-hub-card">
-                            <div class="usb-cable-visual">
-                                <div class="usb-plug-box">💻 ПК / Браузер</div>
-                                <div class="usb-wire">
-                                    <div class="wire-pulse pulse-tx" id="wirePulseTx"></div>
-                                    <div class="wire-pulse pulse-rx" id="wirePulseRx"></div>
-                                    <span class="wire-label">USB-C Cable (Full-Duplex)</span>
-                                </div>
-                                <div class="usb-plug-box mcu-plug">
-                                    <span>⚡ ATmega328P</span>
-                                    <div class="wire-leds">
-                                        <span class="w-led" id="wLedTx">TX</span>
-                                        <span class="w-led" id="wLedRx">RX</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="flasher-bar">
+                        <!-- БЛОК ПРОГРАММАТОРА AVRDUDE -->
+                        <div class="flasher-card-modern">
+                            <div class="flasher-btn-row">
                                 <button type="button" class="btn btn-flash" id="btnFlashMcu" onclick="flashFirmware()">
-                                    <span>⚡</span> Загрузить прошивку в МК (AVRDUDE)
+                                    <span>⚡</span> Загрузить прошивку в чип (AVRDUDE)
                                 </button>
-                                <div class="flash-progress-bar">
-                                    <div class="flash-progress-fill" id="flashProgress"></div>
-                                </div>
                             </div>
+                            <div class="flash-progress-bar"><div class="flash-progress-fill" id="flashProgress"></div></div>
                         </div>
 
+                        <!-- ДВУСТОРОННИЙ SERIAL-ТЕРМИНАЛ -->
                         <div class="serial-monitor-card">
                             <div class="serial-monitor-header">
                                 <span>Монитор порта (Двусторонняя связь)</span>
                                 <div class="serial-baud-select">
                                     <label>Бод:</label>
-                                    <select id="serialBaud">
+                                    <select id="serialBaud" onchange="updateBaudRate(this.value)">
                                         <option value="9600" selected>9600</option>
                                         <option value="115200">115200</option>
                                     </select>
@@ -273,7 +300,7 @@
                                 </div>
                             </div>
                             <div class="serial-terminal-window" id="serialTerminalWindow">
-                                <div class="serial-line system">[Система]: Ожидание подключения по USB-C...</div>
+                                <div class="serial-line system">[Система]: Ожидание подключения по USB...</div>
                             </div>
                             <div class="serial-send-row">
                                 <input type="text" id="serialInput" placeholder="Введите команду в МК..." onkeydown="if(event.key==='Enter') sendSerialData()">
