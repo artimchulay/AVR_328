@@ -1,3 +1,7 @@
+/* =========================================================
+   СТИЛИ СИМУЛЯТОРА AVR ATmega328P + SALEAE LOGIC + USB FLASHER
+   ========================================================= */
+
 :root {
     --bg-dark: #0e1117;
     --panel-bg: #151922;
@@ -19,40 +23,80 @@
     --syn-kw:  #f43f5e;
     --syn-type: #a855f7;
     
-    --font-mono: 'Consolas', 'Courier New', monospace;
+    --font-mono: monospace, ui-monospace, 'Courier New', 'Liberation Mono';
     --font-ui: system-ui, -apple-system, sans-serif;
+    
+    --code-font-size: 14px;
     --line-height: 22px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
+
 html, body {
-    width: 100%; height: 100%;
-    overflow: hidden;
+    width: 100%;
+    height: 100%;
     background: var(--bg-dark);
     color: var(--text-main);
     font-family: var(--font-ui);
+    overflow: hidden;
 }
 
-.app-container { display: flex; flex-direction: column; height: 100vh; width: 100vw; }
+.app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    height: 100dvh;
+    width: 100vw;
+    overflow: hidden;
+}
 
-/* 1. ШАПКА */
+/* ================= 1. ШАПКА ================= */
 .toolbar {
-    background: var(--panel-bg); border-bottom: 1px solid var(--border-color);
-    padding: 8px 14px; display: flex; align-items: center; justify-content: space-between;
-    gap: 10px; flex-shrink: 0; z-index: 100;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    flex-shrink: 0;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
 }
+
 .toolbar-left { display: flex; align-items: center; gap: 10px; }
 .logo { font-size: 1.05em; font-weight: 800; color: #fff; white-space: nowrap; }
 .logo span { color: var(--accent); }
+
 .select-wrapper select {
-    background: var(--card-bg); color: #fff; border: 1px solid var(--border-color);
-    padding: 7px 10px; border-radius: 6px; font-size: 0.85em; outline: none; cursor: pointer; max-width: 320px;
+    background: var(--card-bg); 
+    color: #fff; 
+    border: 1px solid var(--border-color);
+    padding: 7px 10px; 
+    border-radius: 6px; 
+    font-size: 0.84em; 
+    outline: none; 
+    cursor: pointer; 
+    max-width: 300px;
 }
+
 .toolbar-center { display: flex; align-items: center; gap: 6px; }
+
 .btn {
-    background: var(--card-bg); color: #fff; border: 1px solid var(--border-color);
-    padding: 7px 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.82em;
-    display: flex; align-items: center; gap: 5px; transition: transform .1s ease;
+    background: var(--card-bg); 
+    color: #fff; 
+    border: 1px solid var(--border-color);
+    padding: 7px 12px; 
+    border-radius: 6px; 
+    cursor: pointer; 
+    font-weight: 600; 
+    font-size: 0.82em;
+    display: flex; 
+    align-items: center; 
+    gap: 5px; 
+    transition: transform .1s ease, border-color .1s ease;
 }
 .btn:hover { border-color: var(--text-muted); }
 .btn-step { background: rgba(41, 121, 255, 0.2); border-color: var(--accent-blue); color: #90caf9; }
@@ -61,35 +105,73 @@ html, body {
 .btn-reset { color: var(--text-muted); }
 
 .speed-box { display: flex; align-items: center; gap: 6px; font-size: 0.78em; color: var(--text-muted); }
-.speed-box input[type="range"] { width: 60px; accent-color: var(--accent); cursor: pointer; }
+.speed-box input[type="range"] { width: 55px; accent-color: var(--accent); cursor: pointer; }
 
-.nav-screens { display: none; gap: 4px; }
+.nav-screens { display: flex; gap: 5px; }
 .nav-screen-btn {
-    background: rgba(0,0,0,0.3); border: 1px solid var(--border-color); color: var(--text-muted);
-    padding: 6px 12px; border-radius: 6px; font-size: 0.82em; font-weight: 700; cursor: pointer;
+    background: #0d1117; 
+    border: 1px solid var(--border-color); 
+    color: var(--text-muted);
+    padding: 6px 10px; 
+    border-radius: 6px; 
+    font-size: 0.80em; 
+    font-weight: 700; 
+    cursor: pointer;
+    transition: all 0.15s ease;
 }
-.nav-screen-btn.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.nav-screen-btn:hover { color: #fff; border-color: #4b5563; }
+.nav-screen-btn.active {
+    background: var(--accent-blue); 
+    color: #fff; 
+    border-color: var(--accent-blue);
+    box-shadow: 0 0 10px rgba(41, 121, 255, 0.4);
+}
 
 .hint-banner {
-    background: rgba(41, 121, 255, 0.08); border-bottom: 1px solid rgba(41, 121, 255, 0.2);
-    padding: 7px 16px; display: flex; align-items: center; gap: 8px; font-size: 0.84em; color: #cbd5e1; flex-shrink: 0;
+    background: rgba(41, 121, 255, 0.12);
+    border-bottom: 1px solid rgba(41, 121, 255, 0.2);
+    padding: 6px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.84em;
+    color: #cbd5e1;
+    flex-shrink: 0;
 }
 .hint-icon { font-size: 1.1em; }
 .hint-text b { color: var(--accent-gold); }
 
-/* 2. СЕТКА 3 ПАНЕЛЕЙ */
-.slider-viewport { flex: 1; height: 100%; min-height: 0; overflow: hidden; }
-.slider-track { display: grid; grid-template-columns: 1.3fr 1fr 1fr; height: 100%; gap: 10px; padding: 10px; }
-.slide-panel {
-    background: var(--panel-bg); border: 1px solid var(--border-color); border-radius: 12px;
-    display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden;
-}
-.slide-header {
-    background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border-color);
-    padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
-}
-.slide-header h2 { font-size: 0.9em; font-weight: 700; color: #fff; }
+/* ================= 2. ДИНАМИЧЕСКИЕ ПАНЕЛИ ================= */
+.slider-viewport { flex: 1; height: 100%; min-height: 0; overflow: hidden; position: relative; }
+.slider-track { display: flex; width: 100%; height: 100%; gap: 10px; padding: 10px; box-sizing: border-box; }
 
+.slide-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    background: var(--panel-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.slide-panel.panel-hidden { display: none !important; }
+
+.slide-header {
+    background: rgba(255,255,255,0.02); 
+    border-bottom: 1px solid var(--border-color);
+    padding: 8px 12px; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    flex-shrink: 0;
+    gap: 8px;
+}
+.slide-header h2 { font-size: 0.9em; font-weight: 700; color: #fff; white-space: nowrap; }
+
+/* ================= 3. РЕДАКТОР ================= */
 .lang-switch-btns { display: inline-flex; background: #080a0f; border: 1px solid var(--border-color); border-radius: 6px; padding: 2px; }
 .lang-btn {
     background: transparent; border: none; color: var(--text-muted); font-size: 0.72em; font-weight: 800;
@@ -97,20 +179,22 @@ html, body {
 }
 .lang-btn.active { background: var(--accent-blue); color: #fff; }
 
-.btn-clear-code {
-    background: transparent; border: 1px solid var(--border-color); color: var(--text-muted);
-    font-size: 0.75em; padding: 2px 7px; border-radius: 5px; cursor: pointer;
-}
+.font-size-btns { display: inline-flex; align-items: center; gap: 3px; background: #080a0f; border: 1px solid var(--border-color); border-radius: 6px; padding: 2px 4px; }
+.btn-icon { background: #141822; border: 1px solid var(--border-color); color: #fff; padding: 2px 6px; border-radius: 4px; font-size: 0.75em; font-weight: 700; cursor: pointer; }
+.btn-icon:hover { border-color: var(--accent-blue); }
+
+.btn-clear-code { background: transparent; border: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.75em; padding: 2px 7px; border-radius: 5px; cursor: pointer; }
 .btn-clear-code:hover { color: #fff; border-color: #fff; }
 .editor-status { font-size: 0.78em; color: var(--text-muted); display: flex; gap: 10px; }
 
-/* 3. РЕДАКТОР КОДА */
-.editor-wrapper { flex: 1; display: flex; height: 100%; min-height: 0; background: #080a0f; position: relative; overflow: hidden; }
+.editor-wrapper { flex: 1; display: flex; height: 100%; min-height: 250px; background: #080a0f; position: relative; overflow: hidden; }
+
 .line-gutter {
     width: 48px; height: 100%; padding: 10px 0; background: #06070a; border-right: 1px solid #1a1e28;
-    user-select: none; overflow: hidden; flex-shrink: 0; font-family: var(--font-mono); font-size: 13px; line-height: var(--line-height);
+    user-select: none; overflow: hidden; flex-shrink: 0; font-family: var(--font-mono); 
+    font-size: var(--code-font-size) !important; line-height: var(--line-height) !important;
 }
-.gutter-row { height: var(--line-height); display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 6px; cursor: pointer; }
+.gutter-row { height: var(--line-height) !important; display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 6px; cursor: pointer; }
 .gutter-row:hover { background: rgba(255,255,255,0.05); }
 
 .bp-marker { width: 8px; height: 8px; border-radius: 50%; background: transparent; }
@@ -123,25 +207,38 @@ html, body {
 .gutter-num { color: #4b5563; font-size: 0.9em; min-width: 16px; text-align: right; }
 .gutter-row.is-pc .gutter-num { color: #ffd600; font-weight: 700; }
 
-.editor-container { flex: 1; height: 100%; min-height: 0; position: relative; overflow: hidden; }
+.editor-container { flex: 1; height: 100%; position: relative; overflow: hidden; }
+
+pre#highlighting, textarea#asmCode, pre#highlighting code, pre#highlighting span {
+    font-family: var(--font-mono) !important;
+    font-size: var(--code-font-size) !important;
+    line-height: var(--line-height) !important;
+    font-weight: 400 !important;
+    tab-size: 4 !important;
+    -webkit-text-size-adjust: none !important;
+}
+
 pre#highlighting, textarea#asmCode {
     box-sizing: border-box; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-    margin: 0; padding: 10px 12px; font-family: var(--font-mono); font-size: 13px; line-height: var(--line-height);
-    white-space: pre; tab-size: 4; border: none; outline: none; overflow: auto;
+    margin: 0; padding: 10px 12px; border: none; outline: none; white-space: pre !important;
 }
-pre#highlighting code { font-family: inherit; font-size: inherit; line-height: inherit; }
-textarea#asmCode { background: transparent !important; color: transparent !important; caret-color: #38bdf8 !important; resize: none; z-index: 2; user-select: text; }
+
+textarea#asmCode {
+    background: transparent !important; color: transparent !important; caret-color: #38bdf8 !important;
+    resize: none; z-index: 2; overflow-x: auto !important; overflow-y: auto !important;
+}
+
 pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none; z-index: 1; overflow: hidden; }
 
-.syn-op { color: var(--syn-op); font-weight: 700; }
-.syn-com { color: var(--syn-com); font-style: italic; }
-.syn-lbl { color: var(--syn-lbl); font-weight: 700; }
-.syn-dir { color: var(--syn-dir); }
-.syn-num { color: var(--syn-num); }
-.syn-kw { color: var(--syn-kw); font-weight: 700; }
-.syn-type { color: var(--syn-type); font-weight: 700; }
+.syn-op   { color: var(--syn-op); }
+.syn-com  { color: var(--syn-com); }
+.syn-lbl  { color: var(--syn-lbl); }
+.syn-dir  { color: var(--syn-dir); }
+.syn-num  { color: var(--syn-num); }
+.syn-kw   { color: var(--syn-kw); }
+.syn-type { color: var(--syn-type); }
 
-/* 4. ПЛАТА ВВОДА-ВЫВОДА */
+/* ================= 4. ПЛАТА ================= */
 .board-scroll-area { flex: 1; height: 100%; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
 .board-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px; }
 .card-title { font-size: 0.86em; font-weight: 700; color: #fff; margin-bottom: 6px; }
@@ -149,12 +246,11 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
 
 .btn-matrix { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .v-btn {
-    background: #141822; border: 2px solid #334155; color: #e2e8f0; padding: 12px 4px;
-    border-radius: 8px; font-size: 0.85em; font-weight: 800; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    background: #141822; border: 2px solid #334155; color: #e2e8f0; padding: 10px 4px;
+    border-radius: 8px; font-size: 0.82em; font-weight: 800; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px;
 }
-.v-btn span { font-size: 0.7em; font-weight: 400; color: var(--text-muted); }
+.v-btn span { font-size: 0.68em; color: var(--text-muted); }
 .v-btn.latched { background: var(--accent-gold); color: #000; border-color: #fff; box-shadow: 0 0 14px rgba(255, 179, 0, 0.6); }
-.v-btn.latched span { color: #332200; font-weight: 700; }
 
 .port-header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
 .port-selector-btns { display: flex; gap: 4px; }
@@ -162,13 +258,12 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
     background: #141822; border: 1px solid var(--border-color); color: var(--text-muted);
     padding: 5px 10px; border-radius: 6px; font-size: 0.78em; font-weight: 700; cursor: pointer;
 }
-.port-btn.active { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+.port-btn.active { background: var(--accent-blue); color: #fff; }
 
 .single-led { display: flex; align-items: center; gap: 8px; }
 .led-light { width: 22px; height: 22px; border-radius: 50%; background: #252b3b; border: 2px solid #3b455d; }
 .led-light.active-led-yellow { background: #ffd600; box-shadow: 0 0 16px #ffd600, 0 0 4px #fff; border-color: #fff; }
 .led-light.active-led-green { background: #00e676 !important; box-shadow: 0 0 16px #00e676, 0 0 6px #fff !important; border-color: #fff !important; }
-.led-label { font-size: 0.8em; color: var(--text-muted); }
 
 .led-bar { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; text-align: center; }
 .led-col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -179,10 +274,85 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
 .btn-link { background: transparent; border: none; color: var(--accent-blue); cursor: pointer; font-size: 0.8em; }
 .uart-console {
     background: #080a0f; border: 1px solid #1a1e28; color: var(--accent); padding: 8px;
-    border-radius: 6px; font-family: var(--font-mono); font-size: 0.82em; height: 80px; overflow-y: auto; white-space: pre-wrap;
+    border-radius: 6px; font-family: var(--font-mono); font-size: 0.82em; height: 75px; overflow-y: auto; white-space: pre-wrap;
 }
 
-/* 5. РЕГИСТРЫ И ДАМПЫ ОЗУ */
+/* ================= 5. АНАЛИЗАТОР СИГНАЛОВ ================= */
+.analyzer-slide { display: flex; flex-direction: column; }
+.analyzer-controls { display: flex; align-items: center; gap: 5px; }
+
+#btnAnalyzerCapture.active { background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fca5a5; }
+
+.quick-ch-btns { display: flex; gap: 3px; }
+.btn-mini {
+    background: #141822; border: 1px solid var(--border-color); color: var(--text-muted);
+    font-size: 0.68em; font-weight: 700; padding: 2px 6px; border-radius: 4px; cursor: pointer;
+}
+.btn-mini:hover { color: #fff; border-color: var(--accent-blue); }
+
+.analyzer-body { flex: 1; display: flex; flex-direction: column; padding: 10px; background: #080a0f; gap: 8px; overflow: hidden; }
+
+.analyzer-channel-selector { display: flex; flex-wrap: wrap; gap: 5px; max-height: 56px; overflow-y: auto; padding-bottom: 2px; }
+
+.ch-badge {
+    font-size: 0.70em; font-family: var(--font-mono); font-weight: 700; border: 1px solid #334155;
+    background: #141822; color: #64748b; border-radius: 4px; padding: 2px 6px; cursor: pointer; user-select: none;
+}
+.ch-badge.active { background: rgba(41, 121, 255, 0.15); box-shadow: 0 0 6px rgba(0,0,0,0.3); }
+
+.canvas-scroll-wrapper {
+    flex: 1; width: 100%; overflow: auto; background: #050608; border: 1px solid var(--border-color); border-radius: 6px; position: relative;
+}
+canvas#logicCanvas { display: block; }
+
+/* ================= 6. ПРОГРАММАТОР И USB-C ================= */
+.prog-slide { display: flex; flex-direction: column; }
+.prog-scroll-area { flex: 1; height: 100%; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+
+.usb-status-tag { font-size: 0.72em; font-family: var(--font-mono); font-weight: 700; color: #22c55e; background: rgba(34, 197, 94, 0.12); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(34, 197, 94, 0.3); }
+
+.telemetry-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.telem-card { background: #141822; border: 1px solid var(--border-color); border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; gap: 2px; }
+.telem-label { font-size: 0.68em; color: var(--text-muted); }
+.telem-val { font-size: 0.82em; font-family: var(--font-mono); color: #fff; }
+
+.usb-hub-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.usb-cable-visual { display: flex; align-items: center; justify-content: space-between; background: #080a0f; border: 1px solid var(--border-color); border-radius: 6px; padding: 8px 12px; }
+
+.usb-plug-box { background: #1a202c; border: 1px solid #4a5568; border-radius: 6px; padding: 6px 10px; font-size: 0.78em; font-weight: 700; color: #e2e8f0; }
+.mcu-plug { display: flex; align-items: center; gap: 8px; background: #0f231c; border-color: #00e676; color: #00e676; }
+
+.wire-leds { display: flex; gap: 4px; }
+.w-led { font-size: 0.65em; font-family: var(--font-mono); font-weight: 800; padding: 1px 4px; border-radius: 3px; background: #2d3748; color: #718096; }
+.w-led.tx-blink { background: #38bdf8; color: #000; box-shadow: 0 0 8px #38bdf8; }
+.w-led.rx-blink { background: #22c55e; color: #000; box-shadow: 0 0 8px #22c55e; }
+
+.usb-wire { flex: 1; height: 6px; background: #2d3748; margin: 0 10px; position: relative; border-radius: 3px; display: flex; align-items: center; justify-content: center; }
+.wire-label { position: absolute; top: -14px; font-size: 0.65em; color: var(--text-muted); font-family: var(--font-mono); }
+
+.flasher-bar { display: flex; flex-direction: column; gap: 6px; }
+.btn-flash { width: 100%; justify-content: center; background: rgba(0, 230, 118, 0.2); border-color: var(--accent); color: #b9f6ca; padding: 8px; }
+.flash-progress-bar { width: 100%; height: 6px; background: #080a0f; border-radius: 3px; overflow: hidden; border: 1px solid var(--border-color); }
+.flash-progress-fill { width: 0%; height: 100%; background: var(--accent); transition: width 0.1s linear; }
+
+.serial-monitor-card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.serial-monitor-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.80em; font-weight: 700; color: #fff; }
+.serial-baud-select { display: flex; align-items: center; gap: 4px; font-size: 0.78em; color: var(--text-muted); }
+.serial-baud-select select { background: #080a0f; color: #fff; border: 1px solid var(--border-color); border-radius: 4px; padding: 2px 4px; font-size: 0.80em; }
+
+.serial-terminal-window {
+    background: #050608; border: 1px solid #1a1e28; border-radius: 6px; height: 110px; overflow-y: auto; padding: 6px 8px;
+    font-family: var(--font-mono); font-size: 0.80em; display: flex; flex-direction: column; gap: 3px;
+}
+.serial-line.system { color: #64748b; font-style: italic; }
+.serial-line.tx { color: #38bdf8; }
+.serial-line.rx { color: #22c55e; }
+
+.serial-send-row { display: flex; gap: 6px; }
+.serial-send-row input { flex: 1; background: #080a0f; border: 1px solid var(--border-color); border-radius: 6px; color: #fff; padding: 6px 10px; font-family: var(--font-mono); font-size: 0.82em; outline: none; }
+.serial-send-row input:focus { border-color: var(--accent-blue); }
+
+/* ================= 7. РЕГИСТРЫ И ДАМП ================= */
 .cpu-scroll-area { flex: 1; height: 100%; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .cpu-subcard { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 10px; }
 
@@ -207,18 +377,17 @@ pre#highlighting { background: transparent; color: #e2e8f0; pointer-events: none
 .mem-toolbar-header { display: flex; justify-content: space-between; align-items: center; }
 .dump-view-wide {
     background: #080a0f; border: 1px solid var(--border-color); padding: 10px 12px;
-    border-radius: 6px; font-family: var(--font-mono); font-size: 0.85em; height: 130px; overflow-y: auto; color: #38bdf8; line-height: 1.5; white-space: pre;
+    border-radius: 6px; font-family: var(--font-mono); font-size: 0.84em; height: 120px; overflow-y: auto; color: #38bdf8; line-height: 1.5; white-space: pre;
 }
 
-.dump-view-wide::-webkit-scrollbar, .board-scroll-area::-webkit-scrollbar, .cpu-scroll-area::-webkit-scrollbar { width: 6px; height: 6px; }
-.dump-view-wide::-webkit-scrollbar-thumb, .board-scroll-area::-webkit-scrollbar-thumb, .cpu-scroll-area::-webkit-scrollbar-thumb { background: #2b3346; border-radius: 4px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-thumb { background: #2b3346; border-radius: 4px; }
 
-@media (max-width: 950px) {
-    .nav-screens { display: flex; }
-    .slider-viewport { overflow-x: auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; }
-    .slider-track { display: flex; width: 300%; grid-template-columns: none; padding: 6px; gap: 0; }
-    .slide-panel { flex: 0 0 33.333333%; width: 33.333333%; scroll-snap-align: start; border-radius: 0; }
-    .toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
+/* МОБИЛЬНАЯ ВЕРСИЯ */
+@media (max-width: 900px) {
+    .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
     .toolbar-left, .toolbar-center { justify-content: space-between; }
-    .select-wrapper select { max-width: 180px; }
+    .select-wrapper select { max-width: 170px; }
+    .slider-track { flex-direction: column; overflow-y: auto; }
+    .slide-panel { min-height: 380px; flex: none; width: 100%; }
 }
