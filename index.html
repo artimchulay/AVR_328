@@ -16,12 +16,10 @@
                 <div class="logo">⚡ <span>AVR Studio</span></div>
                 <div class="select-wrapper">
                     <select id="exampleSelector" onchange="loadSelectedExample()">
-                        <!-- Программы на C -->
                         <option value="c_interrupt_int0">⚡ C: Внешнее прерывание INT0 (Кнопка K1)</option>
                         <option value="c_blink_counter">⚡ C: Мигающий светодиод L (Счетчик 800 000)</option>
                         <option value="c_zadanie5">⚡ C: Кнопки-переключатели светодиодов (PD2..PD4)</option>
                         <option value="c_example3">⚡ C: Кнопка включает светодиод L</option>
-                        <!-- Программы на ASM -->
                         <option value="test_all" selected>📝 ASM: Комплексный тест: команды и флаги SREG</option>
                         <option value="led_running">📝 ASM: Бегущий огонёк (Порт D)</option>
                         <option value="uart_tx">📝 ASM: Отправка текста в терминал (UART)</option>
@@ -31,13 +29,13 @@
             </div>
 
             <div class="toolbar-center">
-                <button type="button" id="btnStep" class="btn btn-step" onclick="cpuStep()" title="Один шаг (F11)">
+                <button type="button" id="btnStep" class="btn btn-step" onclick="cpuStep()" title="Шаг (F11)">
                     <span>⏭</span> Шаг
                 </button>
                 <button type="button" id="btnRun" class="btn btn-run" onclick="toggleRun()" title="Пуск / Пауза">
                     <span id="runIcon">▶</span> <span id="runText">Пуск</span>
                 </button>
-                <button type="button" id="btnReset" class="btn btn-reset" onclick="cpuReset()" title="Сброс процессора">
+                <button type="button" id="btnReset" class="btn btn-reset" onclick="cpuReset()" title="Сброс">
                     <span>🔄</span> Сброс
                 </button>
                 
@@ -47,10 +45,10 @@
                 </div>
             </div>
 
-            <!-- ВКЛАДКИ -->
+            <!-- ВКЛАДКИ ПАНЕЛЕЙ -->
             <nav class="nav-screens" id="panelNav">
                 <button type="button" class="nav-screen-btn active" id="tabBtn_editor" onclick="togglePanel('editor')">📝 Код</button>
-                <button type="button" class="nav-screen-btn" id="tabBtn_board" onclick="togglePanel('board')">💡 Плата</button>
+                <button type="button" class="nav-screen-btn active" id="tabBtn_board" onclick="togglePanel('board')">💡 Плата</button>
                 <button type="button" class="nav-screen-btn active" id="tabBtn_analyzer" onclick="togglePanel('analyzer')">📊 Анализатор</button>
                 <button type="button" class="nav-screen-btn active" id="tabBtn_prog" onclick="togglePanel('prog')">🔌 Программатор</button>
                 <button type="button" class="nav-screen-btn" id="tabBtn_cpu" onclick="togglePanel('cpu')">⚙️ Процессор</button>
@@ -97,16 +95,43 @@
                     </div>
                 </section>
 
-                <!-- ПАНЕЛЬ 2: ИНТЕРАКТИВНАЯ ПЛАТА -->
-                <section class="slide-panel board-slide panel-hidden" id="panel_board">
+                <!-- ПАНЕЛЬ 2: ИНТЕРАКТИВНАЯ ПЛАТА + КОНСТРУКТОР ПИНОВ -->
+                <section class="slide-panel board-slide" id="panel_board">
                     <div class="slide-header">
                         <h2>💡 Интерактивная плата ввода-вывода</h2>
                         <small style="color:var(--text-muted);">Кнопки с фиксацией</small>
                     </div>
                     <div class="board-scroll-area">
+                        <!-- КОНСТРУКТОР КАСТОМНЫХ ПИНОВ -->
+                        <div class="board-card custom-builder-card">
+                            <div class="card-title">➕ Конструктор пинов (Свои кнопки и светодиоды)</div>
+                            <p class="board-note">Выберите любой пин МК и добавьте компонент:</p>
+                            <div class="builder-row">
+                                <select id="builderPinSelect" class="builder-select">
+                                    <option value="D0">PD0 (RX)</option><option value="D1">PD1 (TX)</option>
+                                    <option value="D2">PD2</option><option value="D3">PD3</option>
+                                    <option value="D4">PD4</option><option value="D5">PD5</option>
+                                    <option value="D6">PD6</option><option value="D7">PD7</option>
+                                    <option value="B0">PB0</option><option value="B1">PB1</option>
+                                    <option value="B2">PB2</option><option value="B3">PB3</option>
+                                    <option value="B4">PB4</option><option value="B5">PB5</option>
+                                    <option value="C0">PC0 (A0)</option><option value="C1">PC1 (A1)</option>
+                                    <option value="C2">PC2 (A2)</option><option value="C3">PC3 (A3)</option>
+                                    <option value="C4">PC4 (A4)</option><option value="C5">PC5 (A5)</option>
+                                </select>
+                                <select id="builderTypeSelect" class="builder-select">
+                                    <option value="button">🔘 Кнопка (Вход)</option>
+                                    <option value="led">💡 Светодиод (Выход)</option>
+                                </select>
+                                <button type="button" class="btn btn-step" onclick="createUserComponent()">Добавить</button>
+                            </div>
+                            <div class="user-components-container" id="userComponentsContainer">
+                                <i style="font-size:0.75em; color:var(--text-muted);">Здесь появятся ваши элементы...</i>
+                            </div>
+                        </div>
+
                         <div class="board-card">
-                            <div class="card-title">Кнопочный модуль (Прерывания INT0, INT1, PCINT)</div>
-                            <p class="board-note">Клик — зажать кнопку (лог. 0). Повторный клик — отжать (лог. 1).</p>
+                            <div class="card-title">Кнопочный модуль (INT0, INT1, PCINT)</div>
                             <div class="btn-matrix">
                                 <button type="button" class="v-btn" id="vbtn_K1" onclick="toggleVButton('K1')">K1 <span>PD2 (INT0)</span></button>
                                 <button type="button" class="v-btn" id="vbtn_K2" onclick="toggleVButton('K2')">K2 <span>PD3 (INT1)</span></button>
@@ -122,18 +147,9 @@
                         <div class="board-card uno-led-card">
                             <div class="card-title">Светодиоды платы [L, TX, RX]</div>
                             <div class="board-leds-row" style="display:flex; gap:16px; align-items:center;">
-                                <div class="single-led">
-                                    <div class="led-light" id="ledPB5"></div>
-                                    <span class="led-label">L (PB5)</span>
-                                </div>
-                                <div class="single-led">
-                                    <div class="led-light" id="ledTX"></div>
-                                    <span class="led-label">TX (PD1)</span>
-                                </div>
-                                <div class="single-led">
-                                    <div class="led-light" id="ledRX"></div>
-                                    <span class="led-label">RX (PD0)</span>
-                                </div>
+                                <div class="single-led"><div class="led-light" id="ledPB5"></div><span class="led-label">L (PB5)</span></div>
+                                <div class="single-led"><div class="led-light" id="ledTX"></div><span class="led-label">TX (PD1)</span></div>
+                                <div class="single-led"><div class="led-light" id="ledRX"></div><span class="led-label">RX (PD0)</span></div>
                             </div>
                         </div>
 
@@ -172,7 +188,7 @@
                 <section class="slide-panel analyzer-slide" id="panel_analyzer">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:6px;">
-                            <h2>📊 Анализатор сигналов</h2>
+                            <h2>📊 Анализатор</h2>
                             <div class="quick-ch-btns">
                                 <button type="button" class="btn-mini" onclick="selectChannelPreset('d')">Все D</button>
                                 <button type="button" class="btn-mini" onclick="selectChannelPreset('b')">Все B</button>
@@ -195,107 +211,84 @@
                         </div>
                     </div>
                 </section>
-               <!-- ПАНЕЛЬ 4: CPU-Z & ПРОГРАММАТОР -->
+
+                <!-- ПАНЕЛЬ 4: CPU-Z & ПРОГРАММАТОР -->
                 <section class="slide-panel prog-slide" id="panel_prog">
                     <div class="slide-header">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <h2>⚡ AVR-Z & Программатор</h2>
+                            <h2>⚡ AVR-Z</h2>
                             <span class="usb-status-tag" id="usbStatusBadge">🔴 USB: Отключено</span>
                         </div>
-                        <button type="button" class="btn-mini btn-usb-connect" id="btnConnectRealUsb" onclick="connectRealWebSerial()">🌐 Подключить реальную плату</button>
+                        <button type="button" class="btn-mini" onclick="connectRealWebSerial()" title="Реальный USB порт">🌐 USB</button>
                     </div>
 
                     <div class="prog-scroll-area">
-                        <!-- СТИЛИЗОВАННОЕ ОКНО CPU-Z -->
                         <div class="cpuz-window">
-                            <!-- ВКЛАДКИ CPU-Z -->
                             <div class="cpuz-tabs">
                                 <button type="button" class="cpuz-tab active" onclick="switchCpuzTab('cpu')">Процессор</button>
                                 <button type="button" class="cpuz-tab" onclick="switchCpuzTab('mem')">Память</button>
                                 <button type="button" class="cpuz-tab" onclick="switchCpuzTab('board')">Плата & USB</button>
                             </div>
 
-                            <!-- СТРАНИЦА 1: ПРОЦЕССОР -->
                             <div class="cpuz-page active" id="cpuzPage_cpu">
                                 <div class="cpuz-group">
                                     <div class="cpuz-group-title">Процессор (Processor)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Название:</span><b class="cpuz-v" id="cpuzMcuName">Atmel ATmega328P</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Архитектура:</span><span class="cpuz-v">AVR 8-bit RISC (Harvard)</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Название:</span><b class="cpuz-v">Atmel ATmega328P</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Архитектура:</span><span class="cpuz-v">AVR 8-bit RISC</span></div>
                                     <div class="cpuz-row"><span class="cpuz-k">Техпроцесс:</span><span class="cpuz-v">130 nm PicoPower</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Корпус:</span><span class="cpuz-v" id="cpuzPackage">28-pin DIP / 32-lead TQFP</span></div>
                                 </div>
                                 <div class="cpuz-group">
-                                    <div class="cpuz-group-title">Частоты и Питание (Clocks & Voltage)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Частота ядра:</span><b class="cpuz-v" style="color:#38bdf8;" id="cpuzFreq">16.000 MHz</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Напряжение VCC:</span><b class="cpuz-v" style="color:#22c55e;" id="cpuzVolt">5.00 V</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Быстродействие:</span><span class="cpuz-v" id="cpuzMips">16 MIPS (1 такт = 62.5 нс)</span></div>
+                                    <div class="cpuz-group-title">Частоты и Питание</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Частота ядра:</span><b class="cpuz-v" style="color:#38bdf8;">16.000 MHz</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Напряжение VCC:</span><b class="cpuz-v" style="color:#22c55e;">5.00 V</b></div>
                                 </div>
                                 <div class="cpuz-group">
-                                    <div class="cpuz-group-title">Аппаратные ID кремния (Silicon ID)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Сигнатура чипа:</span><b class="cpuz-v" style="color:#f59e0b;" id="cpuzSignature">0x1E 0x95 0x0F</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Fuses (L/H/Ext):</span><span class="cpuz-v" id="cpuzFuses">0xFF / 0xDE / 0xFD</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Lock-биты:</span><span class="cpuz-v">0xFF (Запись/Чтение открыты)</span></div>
+                                    <div class="cpuz-group-title">Сигнатура кремния</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Сигнатура чипа:</span><b class="cpuz-v" style="color:#f59e0b;">0x1E 0x95 0x0F</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Fuses:</span><span class="cpuz-v">0xFF / 0xDE / 0xFD</span></div>
                                 </div>
                             </div>
 
-                            <!-- СТРАНИЦА 2: ПАМЯТЬ -->
                             <div class="cpuz-page" id="cpuzPage_mem">
                                 <div class="cpuz-group">
                                     <div class="cpuz-group-title">Flash (Память программ)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Объем:</span><b class="cpuz-v" id="cpuzFlashTotal">32 768 Байт (32 KB)</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Занято скетчем:</span><span class="cpuz-v" id="cpuzFlashUsed">128 Байт</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Объем:</span><b class="cpuz-v">32 768 Байт (32 KB)</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Занято:</span><span class="cpuz-v" id="cpuzFlashUsed">0 Байт</span></div>
                                     <div class="cpuz-bar-wrapper"><div class="cpuz-bar-fill" id="cpuzFlashBar" style="width:1%;"></div></div>
                                 </div>
                                 <div class="cpuz-group">
                                     <div class="cpuz-group-title">SRAM (Оперативная память)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Объем ОЗУ:</span><b class="cpuz-v" id="cpuzSramTotal">2048 Байт (2 KB)</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Объем ОЗУ:</span><b class="cpuz-v">2048 Байт (2 KB)</b></div>
                                     <div class="cpuz-row"><span class="cpuz-k">Свободно:</span><span class="cpuz-v" id="cpuzSramFree">2048 Байт (100%)</span></div>
                                     <div class="cpuz-bar-wrapper"><div class="cpuz-bar-fill" id="cpuzSramBar" style="width:100%; background:#22c55e;"></div></div>
                                 </div>
-                                <div class="cpuz-group">
-                                    <div class="cpuz-group-title">EEPROM (Энергонезависимая память)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Объем EEPROM:</span><span class="cpuz-v" id="cpuzEeprom">1024 Байт (1 KB)</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Ресурс ячеек:</span><span class="cpuz-v">100 000 циклов перезаписи</span></div>
-                                </div>
                             </div>
 
-                            <!-- СТРАНИЦА 3: ПЛАТА И USB -->
                             <div class="cpuz-page" id="cpuzPage_board">
                                 <div class="cpuz-group">
-                                    <div class="cpuz-group-title">Аппаратное подключение (USB Bridge)</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Тип платы:</span><b class="cpuz-v" id="cpuzBoardModel">Виртуальный эмулятор Arduino Uno</b></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">USB-мост (UART):</span><span class="cpuz-v" id="cpuzBridge">CH340G / ATmega16U2</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Vendor ID (VID):</span><span class="cpuz-v" id="cpuzVid">0x2341 (Arduino SA)</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Product ID (PID):</span><span class="cpuz-v" id="cpuzPid">0x0043 (Uno R3)</span></div>
-                                </div>
-                                <div class="cpuz-group">
-                                    <div class="cpuz-group-title">Интерфейс связи</div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Режим порта:</span><span class="cpuz-v">Full-Duplex (TX/RX)</span></div>
-                                    <div class="cpuz-row"><span class="cpuz-k">Скорость:</span><span class="cpuz-v" id="cpuzBaud">9600 бод</span></div>
+                                    <div class="cpuz-group-title">Статус оборудования</div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Режим:</span><b class="cpuz-v" id="cpuzMode" style="color:#38bdf8;">🖥️ Виртуальный чип</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Физическая плата:</span><b class="cpuz-v" id="cpuzPhysicalStatus" style="color:#ef4444;">🔴 Не подключена</b></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">Модель:</span><span class="cpuz-v" id="cpuzBoardModel">Эмулятор Arduino Uno</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">USB-мост:</span><span class="cpuz-v" id="cpuzBridge">—</span></div>
+                                    <div class="cpuz-row"><span class="cpuz-k">VID / PID:</span><span class="cpuz-v" id="cpuzVid">—</span></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- БЛОК ПРОГРАММАТОРА AVRDUDE -->
                         <div class="flasher-card-modern">
-                            <div class="flasher-btn-row">
-                                <button type="button" class="btn btn-flash" id="btnFlashMcu" onclick="flashFirmware()">
-                                    <span>⚡</span> Загрузить прошивку в чип (AVRDUDE)
-                                </button>
-                            </div>
+                            <button type="button" class="btn btn-flash" id="btnFlashMcu" onclick="flashFirmware()">
+                                <span>⚡</span> Загрузить прошивку в чип (AVRDUDE)
+                            </button>
                             <div class="flash-progress-bar"><div class="flash-progress-fill" id="flashProgress"></div></div>
                         </div>
 
-                        <!-- ДВУСТОРОННИЙ SERIAL-ТЕРМИНАЛ -->
                         <div class="serial-monitor-card">
                             <div class="serial-monitor-header">
-                                <span>Монитор порта (Двусторонняя связь)</span>
+                                <span>Монитор порта (UART)</span>
                                 <div class="serial-baud-select">
                                     <label>Бод:</label>
-                                    <select id="serialBaud" onchange="updateBaudRate(this.value)">
-                                        <option value="9600" selected>9600</option>
-                                        <option value="115200">115200</option>
-                                    </select>
+                                    <select id="serialBaud"><option value="9600" selected>9600</option><option value="115200">115200</option></select>
                                     <button type="button" class="btn-link" onclick="clearSerialLog()">Очистить</button>
                                 </div>
                             </div>
@@ -303,21 +296,21 @@
                                 <div class="serial-line system">[Система]: Ожидание подключения по USB...</div>
                             </div>
                             <div class="serial-send-row">
-                                <input type="text" id="serialInput" placeholder="Введите команду в МК..." onkeydown="if(event.key==='Enter') sendSerialData()">
+                                <input type="text" id="serialInput" placeholder="Команда в МК..." onkeydown="if(event.key==='Enter') sendSerialData()">
                                 <button type="button" class="btn btn-step" onclick="sendSerialData()">Отправить ➔</button>
                             </div>
                         </div>
                     </div>
                 </section>
 
-                <!-- ПАНЕЛЬ 5: РЕГИСТРЫ И ДАМП -->
+                <!-- ПАНЕЛЬ 5: РЕГИСТРЫ И ПАМЯТЬ -->
                 <section class="slide-panel cpu-slide panel-hidden" id="panel_cpu">
                     <div class="slide-header">
-                        <h2>⚙️ Регистры процессора и память</h2>
+                        <h2>⚙️ Регистры и память</h2>
                     </div>
                     <div class="cpu-scroll-area">
                         <div class="cpu-subcard">
-                            <div class="card-title">Регистр состояния SREG [I T H S V N Z C]</div>
+                            <div class="card-title">SREG [I T H S V N Z C]</div>
                             <div class="flags-grid" id="flagsGrid"></div>
                         </div>
 
@@ -337,8 +330,8 @@
                         <div class="cpu-subcard mem-card-expanded">
                             <div class="mem-toolbar-header">
                                 <div class="port-selector-btns">
-                                    <button type="button" class="port-btn active" id="btnMemRAM" onclick="setMemView('ram')">ОЗУ (0x0100+)</button>
-                                    <button type="button" class="port-btn" id="btnMemStack" onclick="setMemView('stack')">Стек (0x08FF)</button>
+                                    <button type="button" class="port-btn active" id="btnMemRAM" onclick="setMemView('ram')">ОЗУ</button>
+                                    <button type="button" class="port-btn" id="btnMemStack" onclick="setMemView('stack')">Стек</button>
                                 </div>
                                 <div class="port-selector-btns">
                                     <button type="button" class="port-btn active" id="btnFmtHex" onclick="setMemFormat('hex')">HEX</button>
