@@ -2098,245 +2098,160 @@ function clearEditor() {
 }
 
 /* =========================================================
-   14. ПРИМЕРЫ ИЗ МЕТОДИЧЕК (ТЕМА 5 И ТЕМА 6)
+   ИСХОДНАЯ БАЗА ПРОГРАММ (СНАЧАЛА C, ЗАТЕМ ASM)
    ========================================================= */
 
 const PROGRAMS = {
-    // ТЕМА 5: ПРИМЕР 1 НА ASM (Стр. 11: Прерывание INT1 по низкому уровню, сброс r17)
-    lab5_asm_int1: {
-        hint: "Тема 5, Пример 1 (ASM): Прерывание INT1 по низкому уровню сигнала на PD3 (K2). Сбрасывает счетчик в 0.",
-        lang: "asm",
-        code: `; Тема 5. Пример 1: Прерывание INT1 по низкому уровню
-.include "m328pdef.inc"
-.org 0
-jmp Reset
-.org 0x004
-jmp Int_1
-
-Reset:
-ldi r16, High(RAMEND)
-out sph, r16
-ldi r16, Low(RAMEND)
-out spl, r16
-ldi r16, 0x00
-sts EICRA, r16       ; Прерывание INT1 по низкому уровню
-ldi r16, 0x02
-out EIMSK, r16       ; Разрешение INT1
-cbi ddrd, 3          ; PD3 на ввод
-sbi portd, 3         ; Подтяжка PULL-UP на PD3
-ldi r16, 0xff
-out ddrc, r16        ; Порт C на вывод
-sei
-
-main:
-inc r17
-out portc, r17
-jmp main
-
-Int_1:
-ldi r17, 0x00        ; Сброс кода при прерывании
-out portc, r17
-reti`
-    },
-
-    // ТЕМА 5: ПРИМЕР 1 НА C (Стр. 14)
+    // 1. C: Внешнее прерывание INT0
     c_interrupt_int0: {
-        hint: "Тема 5, Пример 1 (C): Обработка внешнего прерывания INT1_vect. При зажатии кнопки K2 (PD3) счетчик сбрасывается.",
+        hint: "Нажатие кнопки K1 (PD2, INT0) вызывает прерывание по спаду, инвертируя светодиоды RX и TX.",
         lang: "c",
-        code: `#include <avr/io.h>
+        code: `// Внешнее прерывание INT0 по спаду (нажатие K1 на PD2)
+#include <avr/io.h>
 #include <avr/interrupt.h>
 
-int x;
-
-ISR(INT1_vect)
+ISR(INT0_vect)
 {
-    PORTC = 0x00;
+    // Инвертируем состояние линий PD0 (RX) и PD1 (TX) при прерывании
+    PORTD ^= (1 << PORTD0) | (1 << PORTD1);
 }
 
 int main(void)
 {
-    x = 0;
-    EICRA = 0x00;   // Низкий уровень INT1
-    EIMSK = 0x02;   // Разрешение INT1
-    DDRD = 0x00;
-    PORTD = 0x08;   // Подтяжка на PD3
-    DDRC = 0xFF;
+    EICRA = (1 << ISC01);
+    EIMSK = (1 << INT0);
+
+    DDRD |= (1 << DDD0) | (1 << DDD1);
+    DDRD &= ~(1 << DDD2);
+    PORTD |= (1 << PORTD2); 
+
     sei();
+
+    while (1) { }
+}`
+    },
+
+    // 2. C: Мигающий светодиод L
+    c_blink_counter: {
+        hint: "Мигание светодиодом PB5 через счетчик до 800 000 с вложенными ветками if-else.",
+        lang: "c",
+        code: `// Мигание встроенным светодиодом на плате (PB5) через счетчик
+#define F_CPU 16000000UL
+#include <avr/io.h>
+
+int main(void)
+{
+    DDRB |= (1 << DDB5);
+
+    uint32_t x = 0;
+    int flag = 0;
 
     while (1)
     {
-        PORTC = x;
+        if (x >= 800000)
+        {
+            if (flag == 0)
+            {
+                PORTB |= (1 << PORTB5);
+                flag = 1;
+            }
+            else
+            {
+                PORTB &= ~(1 << PORTB5);
+                flag = 0;
+            }
+            x = 0;
+        }
         x++;
     }
 }`
     },
 
-    // ТЕМА 5: ПРИМЕР 2 НА ASM (Стр. 15: Прерывания PCINT0 и PCINT2, побитовое определение кнопки)
-    lab5_asm_pcint: {
-        hint: "Тема 5, Пример 2 (ASM): Прерывания PCINT0 и PCINT2 с анализом бита через EOR.",
-        lang: "asm",
-        code: `; Тема 5. Пример 2: Прерывания PCINT0 и PCINT2
-.include "m328pdef.inc"
-.org 0
-jmp Reset
-.org 0x006
-jmp mPCINT0
-.org 0x00A
-jmp mPCINT2
-
-Reset:
-ldi r16, low(RAMEND)
-out spl, r16
-ldi r16, high(RAMEND)
-out sph, r16
-ldi r16, 0x07
-sts PCICR, r16       ; Разрешение PCI0, PCI1, PCI2
-ldi r16, 0xFF
-sts PCMSK0, r16      ; Все биты Порта B
-sts PCMSK2, r16      ; Все биты Порта D
-sei
-
-m:
-inc r17
-jmp m
-
-mPCINT0:
-in r20, PINB
-mov r22, r18
-eor r22, r20         ; Выявление изменившегося бита
-mov r18, r20
-reti
-
-mPCINT2:
-in r21, PIND
-mov r23, r19
-eor r23, r21         ; Выявление изменившегося бита
-mov r19, r21
-reti`
-    },
-
-    // ТЕМА 6: ПРИМЕР 1 НА ASM (Стр. 10: Отправка символа '>' в UART по кнопке K1 на PD2)
-    lab6_asm_uart_btn: {
-        hint: "Тема 6, Пример 1 (ASM): Нажатие K1 (PD2, INT0) отправляет символ '>' (0x3E) в терминал UART.",
-        lang: "asm",
-        code: `; Тема 6. Пример 1: Отправка символа по нажатию кнопки
-.include "m328pdef.inc"
-.org 0
-jmp Reset
-.org 0x002
-jmp knopka
-
-Reset:
-ldi r16, 0x03
-sts EICRA, r16       ; INT0 по фронту
-ldi r16, 0x01
-out EIMSK, r16       ; Разрешение INT0
-cbi ddrd, 2
-sbi portd, 2         ; Подтяжка PD2
-
-.equ CLK = 16000000
-.equ BAUD = 9600
-.equ UBRR0_value = (CLK/(BAUD*16)) - 1
-
-ldi r16, high(UBRR0_value)
-sts UBRR0H, r16
-ldi r16, low(UBRR0_value)
-sts UBRR0L, r16
-ldi r16, (1<<TXEN0)
-sts UCSR0B, r16
-ldi r16, (1<<UCSZ00)|(1<<UCSZ01)
-sts UCSR0C, r16
-sei
-
-main:
-jmp main
-
-knopka:
-ldi r16, 0x3E        ; Символ '>'
-sts UDR0, r16
-reti`
-    },
-
-    // ТЕМА 6: ПРИМЕР 2 НА ASM (Стр. 12: LPM, BST, чтение строки ReadyToWork из .db Flash)
-    lab6_asm_lpm_msg: {
-        hint: "Тема 6, Пример 2 (ASM): Посимвольная отправка строки из Flash (LPM, Z+, BST r17, 5).",
-        lang: "asm",
-        code: `; Тема 6. Пример 2: Передача сообщения из ПЗУ (.db) через LPM и BST
-.include "m328pdef.inc"
-.org 0
-jmp Reset
-
-Reset:
-ldi r16, 103
-sts UBRR0L, r16      ; 9600 бод при 16 МГц
-ldi r16, (1<<TXEN0)
-sts UCSR0B, r16
-ldi r16, (1<<UCSZ00)|(1<<UCSZ01)
-sts UCSR0C, r16
-sei
-
-main:
-ldi zl, low(Msg<<1)
-ldi zh, high(Msg<<1)
-ldi r18, 22          ; Длина строки
-
-send:
-lpm r16, Z+          ; Загрузка символа из памяти программ с постинкрементом Z
-sts UDR0, r16
-subi r18, 1
-
-repeat:
-lds r17, UCSR0A
-bst r17, 5           ; Копирование бита UDRE0 во флаг T
-brtc repeat          ; Ожидание готовности буфера
-cpi r18, 0
-breq main            ; Повтор передачи строки
-jmp send
-
-.cseg
-Msg: .db "Atmega328P:ReadyToWork", '\n'`
-    },
-
-    // ТЕМА 6: ЗАДАНИЕ 3 НА C (Стр. 13: Прием символа 'A' по прерыванию USART_RX зажигает LED L)
-    lab6_c_rx_led: {
-        hint: "Тема 6, Задание 3 (C): Введите в поле терминала букву 'A' и нажмите Enter — светодиод L (PB5) зажжется!",
+    // 3. C: Триггеры светодиодов
+    c_zadanie5: {
+        hint: "Кнопки K1 (PD2), K2 (PD3), K3 (PD4) переключают светодиоды PD0 (RX), PD1 (TX) и PB5 (L).",
         lang: "c",
-        code: `#include <avr/io.h>
-#include <avr/interrupt.h>
-
-// Прерывание по завершению приема байта UART
-ISR(USART_RX_vect)
-{
-    if (UDR0 == 'A')
-    {
-        PORTB |= (1 << PORTB5);  // Включить LED L при получении 'A'
-    }
-    else
-    {
-        PORTB &= ~(1 << PORTB5); // Погасить для любого другого символа
-    }
-}
+        code: `// Управление светодиодами кнопками-триггерами
+#define F_CPU 16000000UL
+#include <avr/io.h>
+#include <util/delay.h>
 
 int main(void)
 {
-    DDRB |= (1 << DDB5);        // PB5 (LED L) на вывод
-    UBRR0 = 103;                // 9600 бод
-    UCSR0B |= (1 << RXEN0) | (1 << RXCIE0); // Включение приемника и прерывания RX
-    UCSR0C |= (1 << UCSZ01) | (1 << UCSZ00);
+    DDRD |= (1 << DDD0) | (1 << DDD1);
+    DDRB |= (1 << DDB5);
 
-    sei();
+    PORTD &= ~((1 << PORTD0) | (1 << PORTD1));
+    PORTB &= ~(1 << PORTB5);
+
+    DDRD &= ~((1 << DDD2) | (1 << DDD3) | (1 << DDD4));
+    PORTD |= (1 << PORTD2) | (1 << PORTD3) | (1 << PORTD4);
 
     while (1)
     {
+        if (!(PIND & (1 << PIND2)))
+        {
+            _delay_ms(40);
+            if (!(PIND & (1 << PIND2)))
+            {
+                PORTD ^= (1 << PORTD0);
+                while (!(PIND & (1 << PIND2)));
+                _delay_ms(40);
+            }
+        }
+
+        if (!(PIND & (1 << PIND3)))
+        {
+            _delay_ms(40);
+            if (!(PIND & (1 << PIND3)))
+            {
+                PORTD ^= (1 << PORTD1);
+                while (!(PIND & (1 << PIND3)));
+                _delay_ms(40);
+            }
+        }
+
+        if (!(PIND & (1 << PIND4)))
+        {
+            _delay_ms(40);
+            if (!(PIND & (1 << PIND4)))
+            {
+                PORTB ^= (1 << PORTB5);
+                while (!(PIND & (1 << PIND4)));
+                _delay_ms(40);
+            }
+        }
     }
 }`
     },
 
-    // Комплексный тест всех флагов SREG
+    // 4. C: Кнопка зажигает LED L
+    c_example3: {
+        hint: "Опрос кнопки K4 (PB0) и включение светодиода L (PB5) при нажатии.",
+        lang: "c",
+        code: `// Опрос кнопки PB0 (с подтяжкой) и включение светодиода L (PB5)
+#include <avr/io.h>
+
+int main(void)
+{
+    DDRB = 0x20;
+    PORTB |= 0x01;
+
+    while (1)
+    {
+        if ((PINB & 0x01) == 0)
+            PORTB |= 0x20;
+        else
+            PORTB &= ~0x20;
+    }
+}`
+    },
+
+    // 5. ASM: Тест всех флагов SREG
     test_all: {
-        hint: "Комплексный тест: проверка всех флагов SREG (I, T, H, S, V, N, Z, C), adiw, sbiw и математики АЛУ.",
+        hint: "Комплексный тест: проверка команд, регистров и всех флагов SREG (I, T, H, S, V, N, Z, C).",
         lang: "asm",
-        code: `; Тест флагов SREG, T, ADIW и АЛУ
+        code: `; Комплексный тест: проверка команд, регистров и всех флагов SREG
 .include "m328pdef.inc"
 start:
     ldi r16, 0x08
@@ -2365,17 +2280,53 @@ start:
     subi r17, -3
     ldi r18, 0x80
     neg r18
-    ldi r26, 0xFE
-    ldi r27, 0x00
-    adiw xl, 2          ; Проверка 16-битного adiw
     break
 finish:
     rjmp finish`
     },
 
-    // Сортировка массива в ОЗУ
+    // 6. ASM: Бегущий огонёк
+    led_running: {
+        hint: "Бегущий огонёк по светодиодам Порта D.",
+        lang: "asm",
+        code: `; Бегущий огонёк по выводам PD0..PD7
+.include "m328pdef.inc"
+
+start:
+    ser r16
+    out DDRD, r16
+    ldi r17, 1
+
+loop:
+    out PORTD, r17
+    lsl r17
+    brne loop
+    ldi r17, 1
+    rjmp loop`
+    },
+
+    // 7. ASM: Отправка текста в UART
+    uart_tx: {
+        hint: "Вывод символов текста в виртуальный порт UDR0 (монитор UART).",
+        lang: "asm",
+        code: `; Отправка текстовых символов в терминал UART
+.include "m328pdef.inc"
+start:
+    ldi r16, 0x48    ; 'H'
+    out UDR0, r16
+    ldi r16, 0x69    ; 'i'
+    out UDR0, r16
+    ldi r16, 0x21    ; '!'
+    out UDR0, r16
+    ldi r16, 0x0A    ; '\\n'
+    out UDR0, r16
+stop:
+    break`
+    },
+
+    // 8. ASM: Сортировка массива ОЗУ
     sort_ram: {
-        hint: "Сортировка массива в ОЗУ с использованием команды adiw и указателя X (пара r26:r27).",
+        hint: "Программа записывает 5 чисел в ОЗУ (0x0100..0x0104) и сортирует их по возрастанию.",
         lang: "asm",
         code: `; Сортировка массива из 5 чисел в ОЗУ (0x0100..0x0104) по возрастанию
 .include "m328pdef.inc"
@@ -2420,25 +2371,7 @@ finish:
 };
 
 function loadSelectedExample() {
-    const selector = document.getElementById('exampleSelector');
-    if (!selector) return;
-
-    // Автоматическое наполнение выпадающего списка примерами из обеих методичек
-    if (!selector.dataset.initialized) {
-        selector.innerHTML = `
-            <option value="lab5_asm_int1">📝 ASM Тема 5: Прерывание INT1 по низкому уровню (стр. 11)</option>
-            <option value="c_interrupt_int0">⚡ C Тема 5: Прерывание INT1_vect (стр. 14)</option>
-            <option value="lab5_asm_pcint">📝 ASM Тема 5: PCINT0 и PCINT2 с анализом бита (стр. 15)</option>
-            <option value="lab6_asm_uart_btn">📝 ASM Тема 6: Отправка символа '>' по кнопке K1 (стр. 10)</option>
-            <option value="lab6_asm_lpm_msg">📝 ASM Тема 6: LPM + BST чтение строки ReadyToWork (стр. 12)</option>
-            <option value="lab6_c_rx_led">⚡ C Тема 6: Прием 'A' по USART_RX зажигает LED L (стр. 13)</option>
-            <option value="test_all" selected>📝 ASM: Тест всех флагов SREG, T, ADIW и АЛУ</option>
-            <option value="sort_ram">📝 ASM: Сортировка массива в ОЗУ (adiw / пара X)</option>
-        `;
-        selector.dataset.initialized = "true";
-    }
-
-    const key = selector.value;
+    const key = document.getElementById('exampleSelector').value;
     const banner = document.getElementById('hintBanner');
     if (PROGRAMS[key]) {
         document.getElementById('asmCode').value = PROGRAMS[key].code;
@@ -2450,7 +2383,6 @@ function loadSelectedExample() {
         setEditorLang(PROGRAMS[key].lang || 'asm');
     }
 }
-
 /* =========================================================
    15. ИНИЦИАЛИЗАЦИЯ СИМУЛЯТОРА
    ========================================================= */
