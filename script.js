@@ -418,7 +418,7 @@ function scaleThreshold(val) {
 function compileCToAsm(cCode) {
     let code = cCode.replace(/\/\/[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
 
-    // Автоматическая расстановка скобок { } для однострочных if(...) и else без скобок
+    // Автоматическая расстановка скобок { } для однострочных if/else
     code = code.replace(/if\s*(\((?:[^)(]+|\((?:[^)(]+|\([^)(]*\))*\))*\))\s*([^{;]+;)/g, 'if $1 { $2 }');
     code = code.replace(/else\s+([^{;]+;)/g, 'else { $1 }');
 
@@ -458,6 +458,26 @@ function compileCToAsm(cCode) {
             return l.startsWith('else');
         }
         return false;
+    }
+
+    // Надежное извлечение номера бита из условий (1 << PINx) или масок (0x01)
+    function extractPinAndBit(expr) {
+        const portMatch = expr.match(/(PIN[BCD])/i);
+        if (!portMatch) return null;
+        const port = portMatch[1].toUpperCase();
+
+        let bit = 0;
+        const shiftMatch = expr.match(/1\s*<<\s*([a-zA-Z0-9_]+)/i);
+        if (shiftMatch) {
+            bit = evaluateCExpression(applyDefines(shiftMatch[1]), defines) || 0;
+        } else {
+            const hexMatch = expr.match(/&\s*(0x[0-9a-fA-F]+|\d+)/i);
+            if (hexMatch) {
+                const mask = evaluateCExpression(hexMatch[1], defines) || 1;
+                bit = Math.max(0, Math.round(Math.log2(mask)));
+            }
+        }
+        return { port, bit };
     }
 
     asmList.push({ asm: '.include "m328pdef.inc"', lineNum: mainLineNum });
@@ -500,30 +520,28 @@ function compileCToAsm(cCode) {
         if (line.includes('sei()')) { asmList.push({ asm: 'sei', lineNum }); continue; }
         if (line.includes('cli()')) { asmList.push({ asm: 'cli', lineNum }); continue; }
 
-        // Задержка _delay_ms
+        // Задержка _delay_ms: быстрая для симулятора (2-3 такта, без зависаний)
         const delayMatch = line.match(/_delay_ms\s*\(\s*([0-9]+)\s*\);/);
         if (delayMatch) {
-            const ms = parseInt(delayMatch[1], 10);
-            const count = Math.min(255, Math.max(1, Math.round(ms * 2.5)));
             const lblDelay = `__delay_loop_${labelCounter++}`;
-            asmList.push({ asm: `ldi r24, ${count}`, lineNum });
+            asmList.push({ asm: `ldi r24, 2`, lineNum });
             asmList.push({ asm: `${lblDelay}:`, lineNum });
             asmList.push({ asm: `dec r24`, lineNum });
             asmList.push({ asm: `brne ${lblDelay}`, lineNum });
             continue;
         }
 
-        // Ожидание отпускания кнопки: while (!(PINB & (1 << PINB0)));
-        const waitReleaseMatch = line.match(/while\s*\(\s*!\s*\(\s*(PIN[BCD])\s*&\s*\(\s*1\s*<<\s*([^)]+)\)\s*\)\s*\)\s*;/i);
-        if (waitReleaseMatch) {
-            const pinPort = waitReleaseMatch[1].toUpperCase();
-            const bit = evaluateCExpression(applyDefines(waitReleaseMatch[2]), defines) || 0;
-            const lblWait = `__wait_release_${labelCounter++}`;
-            asmList.push({ asm: `${lblWait}:`, lineNum });
-            asmList.push({ asm: `in r16, ${pinPort}`, lineNum });
-            asmList.push({ asm: `sbrs r16, ${bit}`, lineNum }); // если отпустили (1), выходим
-            asmList.push({ asm: `rjmp ${lblWait}`, lineNum });   // если зажата (0), крутимся
-            continue;
+        // Ожидание отпускания кнопки: while (!(PIND & (1 << PIND2)));
+        if (line.startsWith('while') && line.includes('PIN')) {
+            const pinInfo = extractPinAndBit(line);
+            if (pinInfo) {
+                const lblWait = `__wait_release_${labelCounter++}`;
+                asmList.push({ asm: `${lblWait}:`, lineNum });
+                asmList.push({ asm: `in r16, ${pinInfo.port}`, lineNum });
+                asmList.push({ asm: `sbrs r16, ${pinInfo.bit}`, lineNum }); // если отпустили (1), выходим
+                asmList.push({ asm: `rjmp ${lblWait}`, lineNum });           // если зажата (0), ждем
+                continue;
+            }
         }
 
         if (line === '}' || line.startsWith('}')) {
@@ -608,7 +626,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // ^=
+        // ^= (Инверсия диодов)
         const portXorMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD)\s*\^\=\s*([^;]+);/);
         if (portXorMatch) {
             const portName = portXorMatch[1];
@@ -620,7 +638,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // Присваивание
+        // Присваивание (PORTD = count; или DDRD = 0xFF;)
         const assignAnyMatch = line.match(/\b([a-zA-Z0-9_]+)\s*=\s*([^;]+);/);
         if (assignAnyMatch) {
             const dst = assignAnyMatch[1].trim();
@@ -661,7 +679,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // count--; (ДОБАВЛЕНО ДЛЯ ДЕКРЕМЕНТА)
+        // count--;
         const decMatch = line.match(/\b([a-zA-Z0-9_]+)--;/);
         if (decMatch && varMap[decMatch[1]]) {
             asmList.push({ asm: `dec ${varMap[decMatch[1]].reg}`, lineNum });
@@ -676,23 +694,19 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // if с проверкой нажатия кнопки
-        let ifPinZeroMatch = line.match(/if\s*\(\s*\(?\s*!\s*\(?\s*(PIN[BCD])\s*&\s*([^)]+)\)?\s*\)?\s*\)/i) ||
-                             line.match(/if\s*\(\s*\(?\s*(PIN[BCD])\s*&\s*([^)]+)\)?\s*==\s*0\s*\)/i);
+        // НАДЕЖНЫЙ ОПРОС КНОПОК if (!(PIN...)) ИЛИ if ((PIN & mask) == 0)
+        if (line.startsWith('if') && line.includes('PIN')) {
+            const pinInfo = extractPinAndBit(line);
+            if (pinInfo) {
+                const lblFalse = `lbl_false_${labelCounter++}`;
+                const lblEnd = `lbl_end_${labelCounter++}`;
 
-        if (ifPinZeroMatch) {
-            const pinPort = ifPinZeroMatch[1].toUpperCase();
-            const rawMask = evaluateCExpression(applyDefines(ifPinZeroMatch[2]), defines) || 1;
-            const bit = Math.max(0, Math.round(Math.log2(rawMask)));
-
-            const lblFalse = `lbl_false_${labelCounter++}`;
-            const lblEnd = `lbl_end_${labelCounter++}`;
-
-            asmList.push({ asm: `in r16, ${pinPort}`, lineNum });
-            asmList.push({ asm: `sbrc r16, ${bit}`, lineNum });
-            asmList.push({ asm: `rjmp ${lblFalse}`, lineNum });
-            controlStack.push({ type: 'if', lblFalse, lblEnd });
-            continue;
+                asmList.push({ asm: `in r16, ${pinInfo.port}`, lineNum });
+                asmList.push({ asm: `sbrc r16, ${pinInfo.bit}`, lineNum }); // пропуск если бит=0 (нажата)
+                asmList.push({ asm: `rjmp ${lblFalse}`, lineNum });         // если не нажата -> уходим
+                controlStack.push({ type: 'if', lblFalse, lblEnd });
+                continue;
+            }
         }
 
         // if со сравнением
@@ -747,7 +761,6 @@ function compileCToAsm(cCode) {
 
     return asmList;
 }
-
 /* =========================================================
    4. ПАРСЕР АССЕМБЛЕРА (ПОДДЕРЖКА .ORG, .EQU, .DB, LPM, BST)
    ========================================================= */
