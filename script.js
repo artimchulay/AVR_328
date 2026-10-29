@@ -94,24 +94,48 @@ const vButtons = [
    1. НАВИГАЦИЯ, ТАБЫ И МОБИЛЬНЫЙ СВАЙП
    ========================================================= */
 
-function switchPanel(panelName) {
-    const idx = PANEL_LIST.indexOf(panelName);
-    if (idx !== -1) activePanelIndex = idx;
+/* =========================================================
+   1. МУЛЬТИКОЛОНКИ ДЛЯ ПК (ФОТО 2) И ТАБЫ ДЛЯ ТЕЛЕФОНОВ
+   ========================================================= */
 
-    PANEL_LIST.forEach(name => {
-        const pElem = document.getElementById(`panel_${name}`);
-        const tBtn = document.getElementById(`tabBtn_${name}`);
-        const isCurrent = (name === panelName);
+// Состояние открытых панелей (на ПК по умолчанию открыты все, как на Фото 2)
+const activePanels = {
+    editor: true,
+    board: true,
+    analyzer: true,
+    cpu: true
+};
 
-        if (pElem) pElem.classList.toggle('panel-hidden', !isCurrent);
-        if (tBtn) tBtn.classList.toggle('active', isCurrent);
-    });
+function togglePanel(panelName) {
+    const isMobile = window.innerWidth <= 900;
 
-    if (panelName === 'analyzer') {
+    if (isMobile) {
+        // На смартфонах переключаем как одиночную вкладку
+        PANEL_LIST.forEach(name => {
+            activePanels[name] = (name === panelName);
+            const pElem = document.getElementById(`panel_${name}`);
+            const tBtn = document.getElementById(`tabBtn_${name}`);
+            if (pElem) pElem.classList.toggle('panel-hidden', name !== panelName);
+            if (tBtn) tBtn.classList.toggle('active', name === panelName);
+        });
+    } else {
+        // На ПК включаем / выключаем колонку рядом (как на Фото 2)
+        const activeCount = Object.values(activePanels).filter(Boolean).length;
+        if (activePanels[panelName] && activeCount <= 1) return; // Не закрывать последнюю
+
+        activePanels[panelName] = !activePanels[panelName];
+
+        const pElem = document.getElementById(`panel_${panelName}`);
+        const tBtn = document.getElementById(`tabBtn_${panelName}`);
+
+        if (pElem) pElem.classList.toggle('panel-hidden', !activePanels[panelName]);
+        if (tBtn) tBtn.classList.toggle('active', activePanels[panelName]);
+    }
+
+    if (panelName === 'analyzer' && activePanels.analyzer) {
         setTimeout(resizeAnalyzerCanvas, 40);
     }
 }
-
 // Сенсорный свайп влево/вправо для мобильных устройств
 (function initTouchSwipe() {
     let touchStartX = 0;
@@ -2458,6 +2482,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     renderChannelSelector();
     loadSelectedExample();
-    switchPanel('editor');
+    // Открываем панели при старте
+    if (window.innerWidth <= 900) {
+        togglePanel('editor');
+    } else {
+        PANEL_LIST.forEach(p => {
+            const el = document.getElementById(`panel_${p}`);
+            const btn = document.getElementById(`tabBtn_${p}`);
+            if (el) el.classList.remove('panel-hidden');
+            if (btn) btn.classList.add('active');
+        });
+    }
     setTimeout(resizeAnalyzerCanvas, 100);
 });
