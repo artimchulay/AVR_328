@@ -1,5 +1,5 @@
 /* =========================================================
-   ЯДРО ЭМУЛЯТОРА AVR ATmega328P + SALEAE LOGIC (ПОЛНАЯ ВЕРСИЯ)
+   ЯДРО ЭМУЛЯТОРА AVR ATmega328P + SALEAE LOGIC (ВЕРСИЯ ДЛЯ ЛАБ 5 И 6)
    ========================================================= */
 
 // Карта адресов ввода-вывода (I/O Memory Map ATmega328P)
@@ -17,15 +17,28 @@ const IO = {
 
 const IO_OFFSET = 0x20;
 
+// Таблица векторов прерываний ATmega328P (Адреса Flash в словах)
+const VECTORS = {
+    RESET:      0x0000,
+    INT0:       0x0002,
+    INT1:       0x0004,
+    PCINT0:     0x0006,
+    PCINT1:     0x0008,
+    PCINT2:     0x000A,
+    USART_RX:   0x0024,
+    USART_UDRE: 0x0026,
+    USART_TX:   0x0028
+};
+
 // Таблица тактов выполнения команд ATmega328P (БАГ 13)
 const CYCLES = {
     nop: 1, ldi: 1, mov: 1, add: 1, adc: 1, sub: 1, subi: 1, sbc: 1, sbci: 1,
     and: 1, andi: 1, or: 1, ori: 1, eor: 1, com: 1, neg: 1, inc: 1, dec: 1,
     tst: 1, clr: 1, ser: 1, in: 1, out: 1, sec: 1, clc: 1, sez: 1, clz: 1,
     sen: 1, cln: 1, sev: 1, clv: 1, ses: 1, cls: 1, seh: 1, clh: 1, set: 1, clt: 1,
-    sei: 1, cli: 1, sbi: 2, cbi: 2, lsl: 1, lsr: 1, asr: 1, rol: 1, ror: 1,
-    cp: 1, cpc: 1, cpi: 1, cpse: 1, adiw: 2, sbiw: 2,
-    sbrs: 1, sbrc: 1, rjmp: 2, jmp: 3, call: 4, ret: 4, reti: 4,
+    sei: 1, cli: 1, sbi: 2, cbi: 2, sbis: 1, sbic: 1, bst: 1, bld: 1, lpm: 3,
+    lsl: 1, lsr: 1, asr: 1, rol: 1, ror: 1, cp: 1, cpc: 1, cpi: 1, cpse: 1,
+    adiw: 2, sbiw: 2, sbrs: 1, sbrc: 1, rjmp: 2, jmp: 3, call: 4, ret: 4, reti: 4,
     lds: 2, sts: 2, ld: 1, st: 1, push: 2, pop: 2,
     breq: 1, brne: 1, brcs: 1, brcc: 1, brlo: 1, brsh: 1,
     brmi: 1, brpl: 1, brge: 1, brlt: 1, brhs: 1, brhc: 1, brts: 1, brtc: 1,
@@ -35,13 +48,14 @@ const CYCLES = {
 let currentLang = 'asm';
 let currentFontSize = 14;
 const PANEL_LIST = ['editor', 'board', 'analyzer', 'cpu'];
-let activePanelIndex = 0; // Для мобильного режима и свайпов
+let activePanelIndex = 0;
 
 // Состояние ядра процессора
 const cpu = {
     r: new Uint8Array(32),
     prevR: new Uint8Array(32),
     ram: new Uint8Array(0x0900),
+    flashBytes: new Uint8Array(32768), // Побайтовая Flash-память для LPM и строк .db
     pc: 0,
     sp: 0x08FF,
     sreg: { C:0, Z:0, N:0, V:0, S:0, H:0, T:0, I:0 },
@@ -51,7 +65,9 @@ const cpu = {
     speed: 40,
     program: [],
     labels: {},
+    equConstants: {}, // Символьные константы (.equ)
     breakpoints: new Set(),
+    rxBuffer: [], // Очередь принятых байт UART (RX)
     uartLog: "",
     error: null,
     selectedPort: 'D',
@@ -64,11 +80,11 @@ const cpu = {
 
 // Виртуальные кнопки макета (K1..K8)
 const vButtons = [
-    { id: 'K1', port: 'D', pin: 2, pressed: false },
-    { id: 'K2', port: 'D', pin: 3, pressed: false },
+    { id: 'K1', port: 'D', pin: 2, pressed: false }, // INT0
+    { id: 'K2', port: 'D', pin: 3, pressed: false }, // INT1
     { id: 'K3', port: 'D', pin: 4, pressed: false },
-    { id: 'K4', port: 'B', pin: 0, pressed: false },
-    { id: 'K5', port: 'B', pin: 1, pressed: false },
+    { id: 'K4', port: 'B', pin: 0, pressed: false }, // PCINT0
+    { id: 'K5', port: 'B', pin: 1, pressed: false }, // PCINT1
     { id: 'K6', port: 'B', pin: 2, pressed: false },
     { id: 'K7', port: 'B', pin: 3, pressed: false },
     { id: 'K8', port: 'B', pin: 4, pressed: false }
@@ -96,7 +112,7 @@ function switchPanel(panelName) {
     }
 }
 
-// Сенсорный свайп для мобильных устройств (влево/вправо)
+// Сенсорный свайп влево/вправо для мобильных устройств
 (function initTouchSwipe() {
     let touchStartX = 0;
     let touchStartY = 0;
@@ -110,13 +126,10 @@ function switchPanel(panelName) {
         const diffX = e.changedTouches[0].screenX - touchStartX;
         const diffY = e.changedTouches[0].screenY - touchStartY;
 
-        // Если горизонтальный свайп преобладает над вертикальным скроллом
         if (Math.abs(diffX) > 60 && Math.abs(diffX) > Math.abs(diffY) * 1.5) {
             if (diffX < 0 && activePanelIndex < PANEL_LIST.length - 1) {
-                // Свайп влево -> следующий экран
                 switchPanel(PANEL_LIST[activePanelIndex + 1]);
             } else if (diffX > 0 && activePanelIndex > 0) {
-                // Свайп вправо -> предыдущий экран
                 switchPanel(PANEL_LIST[activePanelIndex - 1]);
             }
         }
@@ -283,7 +296,6 @@ function drawLogicAnalyzer() {
         const highY = baseY;
         const lowY  = baseY + trackHeight - 12;
 
-        // Базовая линия канала
         ctx.strokeStyle = '#151c28';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -291,7 +303,6 @@ function drawLogicAnalyzer() {
         ctx.lineTo(w, lowY);
         ctx.stroke();
 
-        // Подпись имени пина
         ctx.fillStyle = ch.color;
         ctx.font = 'bold 11px "JetBrains Mono", monospace';
         ctx.fillText(ch.label, 8, lowY - 3);
@@ -332,12 +343,14 @@ function drawLogicAnalyzer() {
 }
 
 /* =========================================================
-   3. ТРАНСЛЯТОР MICRO-C -> AVR ASM (БАГИ 15 И 16)
+   3. ТРАНСЛЯТОР MICRO-C -> AVR ASM (ДЛЯ ТЕМЫ 5 И ТЕМЫ 6)
    ========================================================= */
 
 const AVR_CONSTS = {
     ISC00: 0, ISC01: 1, ISC10: 2, ISC11: 3,
     INT0: 0, INT1: 1, PCIE0: 0, PCIE1: 1, PCIE2: 2,
+    TXEN0: 3, RXEN0: 4, UDRIE0: 5, TXCIE0: 6, RXCIE0: 7,
+    UCSZ00: 1, UCSZ01: 2, UCSZ02: 2,
     PORTD0: 0, PORTD1: 1, PORTD2: 2, PORTD3: 3, PORTD4: 4, PORTD5: 5, PORTD6: 6, PORTD7: 7,
     PORTB0: 0, PORTB1: 1, PORTB2: 2, PORTB3: 3, PORTB4: 4, PORTB5: 5, PORTB6: 6, PORTB7: 7,
     PORTC0: 0, PORTC1: 1, PORTC2: 2, PORTC3: 3, PORTC4: 4, PORTC5: 5, PORTC6: 6, PORTC7: 7,
@@ -363,6 +376,8 @@ function evaluateCExpression(expr, defines) {
     for (const [k, v] of Object.entries(AVR_CONSTS)) {
         expr = expr.replace(new RegExp('\\b' + k + '\\b', 'g'), v);
     }
+    // Символьные литералы (например 'A' -> 65)
+    expr = expr.replace(/'(.)'/g, (m, c) => c.charCodeAt(0));
     expr = expr.replace(/UL|U|L/gi, '');
     try {
         return Function(`'use strict'; return (${expr});`)();
@@ -425,7 +440,7 @@ function compileCToAsm(cCode) {
 
         if (!line || line.startsWith('#')) continue;
 
-        // Обработка прерываний ISR (БАГ 15: Сохранение SREG и R16 в прологе)
+        // Обработка прерываний ISR (Включая USART из Темы 6)
         const isrMatch = line.match(/ISR\s*\(\s*([a-zA-Z0-9_]+)\s*\)/);
         if (isrMatch) {
             const vName = isrMatch[1];
@@ -433,7 +448,11 @@ function compileCToAsm(cCode) {
             if (vName.includes('INT0')) lbl = '__vector_int0';
             else if (vName.includes('INT1')) lbl = '__vector_int1';
             else if (vName.includes('PCINT0')) lbl = '__vector_pcint0';
+            else if (vName.includes('PCINT1')) lbl = '__vector_pcint1';
             else if (vName.includes('PCINT2')) lbl = '__vector_pcint2';
+            else if (vName.includes('USART_RX')) lbl = '__vector_usart_rx';
+            else if (vName.includes('USART_UDRE')) lbl = '__vector_usart_udre';
+            else if (vName.includes('USART_TX')) lbl = '__vector_usart_tx';
 
             asmList.push({ asm: `${lbl}:`, lineNum });
             asmList.push({ asm: `push r16`, lineNum });
@@ -453,7 +472,7 @@ function compileCToAsm(cCode) {
         if (line.includes('sei()')) { asmList.push({ asm: 'sei', lineNum }); continue; }
         if (line.includes('cli()')) { asmList.push({ asm: 'cli', lineNum }); continue; }
 
-        // БАГ 16: Трансляция _delay_ms(N) в цикл adiw/sbiw
+        // Задержка _delay_ms
         const delayMatch = line.match(/_delay_ms\s*\(\s*([0-9]+)\s*\);/);
         if (delayMatch) {
             const ms = parseInt(delayMatch[1], 10);
@@ -466,7 +485,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // Закрывающие фигурные скобки блоков (БАГ 15: Восстановление SREG в эпилоге ISR)
+        // Закрытие скобок
         if (line === '}' || line.startsWith('}')) {
             if (controlStack.length > 0) {
                 const top = controlStack[controlStack.length - 1];
@@ -505,43 +524,47 @@ function compileCToAsm(cCode) {
 
         if (line === '{') continue;
 
-        // Объявление переменных
-        const declMatch = line.match(/\b(uint8_t|int8_t|uint16_t|int16_t|uint32_t|int)\s+([a-zA-Z0-9_]+)(\s*=\s*([^;]+))?;/);
-        if (declMatch) {
-            const varName = declMatch[2];
-            let initVal = declMatch[4] ? declMatch[4].trim() : "0";
-            const reg = 'r' + (regCounter++);
-            varMap[varName] = { reg };
-            let constVal = evaluateCExpression(applyDefines(initVal), defines);
-            if (constVal !== null) {
-                constVal = scaleThreshold(constVal);
-                const inst = { asm: `ldi ${reg}, ${constVal & 0xFF}`, lineNum };
-                if (!insideMain) globalInits.push(inst);
-                else asmList.push(inst);
+        // Объявление переменных (включая char x, y, temp, count;)
+        const multiDeclMatch = line.match(/\b(uint8_t|int8_t|uint16_t|int16_t|uint32_t|int|char)\s+([^;]+);/);
+        if (multiDeclMatch) {
+            const rawVars = multiDeclMatch[2].split(',');
+            for (let vItem of rawVars) {
+                const vParts = vItem.trim().split('=');
+                const vName = vParts[0].trim();
+                const initVal = vParts[1] ? vParts[1].trim() : "0";
+                const reg = 'r' + (regCounter++);
+                varMap[vName] = { reg };
+                let constVal = evaluateCExpression(applyDefines(initVal), defines);
+                if (constVal !== null) {
+                    constVal = scaleThreshold(constVal);
+                    const inst = { asm: `ldi ${reg}, ${constVal & 0xFF}`, lineNum };
+                    if (!insideMain) globalInits.push(inst);
+                    else asmList.push(inst);
+                }
             }
             continue;
         }
 
         // Побитовые операции |=
-        const portOrMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD|DDRC|PORTC|PCICR|EICRA|EIMSK)\s*\|\=\s*([^;]+);/);
+        const portOrMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD|DDRC|PORTC|PCICR|EICRA|EIMSK|UCSR0B|UCSR0C)\s*\|\=\s*([^;]+);/);
         if (portOrMatch) {
             const portName = portOrMatch[1];
             const mask = evaluateCExpression(applyDefines(portOrMatch[2]), defines) & 0xFF;
-            asmList.push({ asm: `in r16, ${portName}`, lineNum });
+            asmList.push({ asm: `lds r16, ${portName}`, lineNum });
             asmList.push({ asm: `ori r16, ${mask}`, lineNum });
-            asmList.push({ asm: `out ${portName}, r16`, lineNum });
+            asmList.push({ asm: `sts ${portName}, r16`, lineNum });
             continue;
         }
 
         // Побитовые операции &= ~
-        const portAndNotMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD|DDRC|PORTC)\s*&\=\s*~\s*\(?\s*([^;]+)\)?;/);
+        const portAndNotMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD|DDRC|PORTC|UCSR0B|UCSR0C)\s*&\=\s*~\s*\(?\s*([^;]+)\)?;/);
         if (portAndNotMatch) {
             const portName = portAndNotMatch[1];
             const mask = evaluateCExpression(applyDefines(portAndNotMatch[2].replace(/\)+$/, '')), defines) & 0xFF;
             const invMask = (~mask) & 0xFF;
-            asmList.push({ asm: `in r16, ${portName}`, lineNum });
+            asmList.push({ asm: `lds r16, ${portName}`, lineNum });
             asmList.push({ asm: `andi r16, ${invMask}`, lineNum });
-            asmList.push({ asm: `out ${portName}, r16`, lineNum });
+            asmList.push({ asm: `sts ${portName}, r16`, lineNum });
             continue;
         }
 
@@ -550,64 +573,69 @@ function compileCToAsm(cCode) {
         if (portXorMatch) {
             const portName = portXorMatch[1];
             const mask = evaluateCExpression(applyDefines(portXorMatch[2]), defines) & 0xFF;
-            asmList.push({ asm: `in r16, ${portName}`, lineNum });
+            asmList.push({ asm: `lds r16, ${portName}`, lineNum });
             asmList.push({ asm: `ldi r17, ${mask}`, lineNum });
             asmList.push({ asm: `eor r16, r17`, lineNum });
-            asmList.push({ asm: `out ${portName}, r16`, lineNum });
+            asmList.push({ asm: `sts ${portName}, r16`, lineNum });
             continue;
         }
 
-        // Прямое присваивание регистру порта
-        const portAssignMatch = line.match(/\b(DDRB|PORTB|DDRD|PORTD|DDRC|PORTC|EICRA|EIMSK|PCICR|PCMSK0|PCMSK2)\s*=\s*([^;]+);/);
-        if (portAssignMatch) {
-            const portName = portAssignMatch[1];
-            let expr = applyDefines(portAssignMatch[2].trim());
-
-            if (expr.includes('&')) {
-                const parts = expr.split('&');
-                const vName = parts[0].trim();
-                const mask = evaluateCExpression(applyDefines(parts[1]), defines);
-                if (varMap[vName]) {
-                    asmList.push({ asm: `mov r16, ${varMap[vName].reg}`, lineNum });
-                    asmList.push({ asm: `andi r16, ${(mask !== null ? mask : 0xFF) & 0xFF}`, lineNum });
-                    asmList.push({ asm: `out ${portName}, r16`, lineNum });
-                }
-            } else {
-                const constVal = evaluateCExpression(expr, defines);
-                if (constVal !== null) {
-                    asmList.push({ asm: `ldi r16, ${constVal & 0xFF}`, lineNum });
-                    asmList.push({ asm: `out ${portName}, r16`, lineNum });
-                } else if (varMap[expr]) {
-                    asmList.push({ asm: `out ${portName}, ${varMap[expr].reg}`, lineNum });
-                }
+        // XOR переменных: y = x ^ temp; (Пример 2 Темы 5)
+        const varXorMatch = line.match(/\b([a-zA-Z0-9_]+)\s*=\s*([a-zA-Z0-9_]+)\s*\^\s*([a-zA-Z0-9_]+);/);
+        if (varXorMatch) {
+            const dst = varXorMatch[1], src1 = varXorMatch[2], src2 = varXorMatch[3];
+            if (varMap[dst] && varMap[src1] && varMap[src2]) {
+                asmList.push({ asm: `mov ${varMap[dst].reg}, ${varMap[src1].reg}`, lineNum });
+                asmList.push({ asm: `eor ${varMap[dst].reg}, ${varMap[src2].reg}`, lineNum });
+                continue;
             }
-            continue;
         }
 
-        // Присваивание переменной
-        const varAssignMatch = line.match(/\b([a-zA-Z0-9_]+)\s*=\s*([^;]+);/);
-        if (varAssignMatch) {
-            const vName = varAssignMatch[1];
-            if (varMap[vName]) {
-                let constVal = evaluateCExpression(applyDefines(varAssignMatch[2]), defines);
-                if (constVal !== null) {
-                    constVal = scaleThreshold(constVal);
-                    asmList.push({ asm: `ldi ${varMap[vName].reg}, ${constVal & 0xFF}`, lineNum });
-                } else if (varMap[varAssignMatch[2].trim()]) {
-                    asmList.push({ asm: `mov ${varMap[vName].reg}, ${varMap[varAssignMatch[2].trim()].reg}`, lineNum });
-                }
+        // Присваивание регистрам: UDR0 = 0x3E; или PORTC = count; или x = PINB;
+        const assignAnyMatch = line.match(/\b([a-zA-Z0-9_]+)\s*=\s*([^;]+);/);
+        if (assignAnyMatch) {
+            const dst = assignAnyMatch[1].trim();
+            const src = assignAnyMatch[2].trim();
+
+            // Чтение порта в переменную: x = PINB; x = UDR0;
+            if (varMap[dst] && (src === 'PINB' || src === 'PIND' || src === 'PINC' || src === 'UDR0')) {
+                asmList.push({ asm: `lds ${varMap[dst].reg}, ${src}`, lineNum });
+                continue;
             }
-            continue;
+
+            // Запись в порт: PORTC = count; UDR0 = 0x3E;
+            if (['PORTB','PORTC','PORTD','DDRB','DDRC','DDRD','EICRA','EIMSK','PCICR','PCICR0','PCMSK0','PCMSK2','UBRR0','UDR0'].includes(dst)) {
+                let pName = (dst === 'PCICR0') ? 'PCICR' : dst;
+                let cVal = evaluateCExpression(applyDefines(src), defines);
+                if (cVal !== null) {
+                    asmList.push({ asm: `ldi r16, ${cVal & 0xFF}`, lineNum });
+                    asmList.push({ asm: `sts ${pName}, r16`, lineNum });
+                } else if (varMap[src]) {
+                    asmList.push({ asm: `sts ${pName}, ${varMap[src].reg}`, lineNum });
+                }
+                continue;
+            }
+
+            // Присваивание переменной: temp = x; или count = 0;
+            if (varMap[dst]) {
+                let cVal = evaluateCExpression(applyDefines(src), defines);
+                if (cVal !== null) {
+                    asmList.push({ asm: `ldi ${varMap[dst].reg}, ${cVal & 0xFF}`, lineNum });
+                } else if (varMap[src]) {
+                    asmList.push({ asm: `mov ${varMap[dst].reg}, ${varMap[src].reg}`, lineNum });
+                }
+                continue;
+            }
         }
 
-        // Инкремент
+        // Инкремент: count++;
         const incMatch = line.match(/\b([a-zA-Z0-9_]+)\+\+;/);
         if (incMatch && varMap[incMatch[1]]) {
             asmList.push({ asm: `inc ${varMap[incMatch[1]].reg}`, lineNum });
             continue;
         }
 
-        // Бесконечный цикл while (1)
+        // while (1)
         if (line.startsWith('while') && line.includes('1')) {
             const startLbl = `while_start_${labelCounter++}`;
             asmList.push({ asm: `${startLbl}:`, lineNum });
@@ -615,7 +643,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // Условие if с кнопкой
+        // if с кнопкой
         let ifBtnMatch = line.match(/if\s*\(\s*!\s*\(\s*(PINB|PIND)\s*&\s*\(\s*1\s*<<\s*([^)]+)\)\s*\)\s*\)/);
         if (ifBtnMatch) {
             const pinPort = ifBtnMatch[1];
@@ -629,7 +657,7 @@ function compileCToAsm(cCode) {
             continue;
         }
 
-        // Условие if со сравнением
+        // if со сравнением (например if (UDR0 == 'A'))
         const ifCmpMatch = line.match(/if\s*\(\s*([a-zA-Z0-9_]+)\s*(==|!=|>=|>|<=|<)\s*([^)]+)\)/);
         if (ifCmpMatch) {
             const vName = ifCmpMatch[1];
@@ -637,12 +665,19 @@ function compileCToAsm(cCode) {
             let rawCmp = applyDefines(ifCmpMatch[3]);
             let cmpVal = evaluateCExpression(rawCmp, defines);
 
-            if (cmpVal !== null && varMap[vName]) {
+            if (cmpVal !== null) {
+                let compReg = 'r16';
+                if (varMap[vName]) compReg = varMap[vName].reg;
+                else if (vName === 'UDR0') {
+                    asmList.push({ asm: `lds r16, UDR0`, lineNum });
+                    compReg = 'r16';
+                }
+
                 cmpVal = scaleThreshold(cmpVal);
                 const lblFalse = `lbl_false_${labelCounter++}`;
                 const lblEnd = `lbl_end_${labelCounter++}`;
 
-                asmList.push({ asm: `cpi ${varMap[vName].reg}, ${cmpVal & 0xFF}`, lineNum });
+                asmList.push({ asm: `cpi ${compReg}, ${cmpVal & 0xFF}`, lineNum });
                 if (op === '==')      asmList.push({ asm: `brne ${lblFalse}`, lineNum });
                 else if (op === '!=') asmList.push({ asm: `breq ${lblFalse}`, lineNum });
                 else if (op === '>=') asmList.push({ asm: `brlo ${lblFalse}`, lineNum });
@@ -676,12 +711,60 @@ function compileCToAsm(cCode) {
 }
 
 /* =========================================================
-   4. ПАРСЕР АССЕМБЛЕРА И РАЗРЕШЕНИЕ ИМЕН
+   4. ПАРСЕР АССЕМБЛЕРА (ПОДДЕРЖКА .ORG, .EQU, .DB, LPM, BST)
    ========================================================= */
+
+function evaluateAsmExpression(expr) {
+    if (!expr) return 0;
+    expr = expr.trim();
+
+    // Замена констант .equ
+    for (const [k, v] of Object.entries(cpu.equConstants)) {
+        expr = expr.replace(new RegExp('\\b' + k + '\\b', 'gi'), v);
+    }
+    for (const [k, v] of Object.entries(AVR_CONSTS)) {
+        expr = expr.replace(new RegExp('\\b' + k + '\\b', 'gi'), v);
+    }
+
+    // Поддержка меток со сдвигами: Msg<<1 или Msg
+    for (const [lbl, addr] of Object.entries(cpu.labels)) {
+        expr = expr.replace(new RegExp('\\b' + lbl + '\\b', 'gi'), addr);
+    }
+
+    if (expr.toLowerCase().includes('ramend')) return 0x08FF;
+    if (expr.toLowerCase().includes('high(ramend)')) return 0x08;
+    if (expr.toLowerCase().includes('low(ramend)')) return 0xFF;
+
+    // Выделение функций low(...) и high(...)
+    expr = expr.replace(/high\s*\(([^)]+)\)/gi, (m, inner) => `((${inner}) >> 8) & 0xFF`);
+    expr = expr.replace(/low\s*\(([^)]+)\)/gi, (m, inner) => `(${inner}) & 0xFF`);
+
+    // Шестнадцатеричные и двоичные литералы
+    expr = expr.replace(/\$([0-9a-fA-F]+)/g, '0x$1');
+
+    try {
+        return Function(`'use strict'; return (${expr});`)();
+    } catch (e) {
+        return parseInt(expr, 10) || 0;
+    }
+}
+
+function parseVal(arg) {
+    if (!arg) return 0;
+    arg = arg.trim();
+
+    const upper = arg.toUpperCase();
+    if (IO[upper] !== undefined) {
+        return IO[upper] < 0x60 ? IO[upper] - IO_OFFSET : IO[upper];
+    }
+    return evaluateAsmExpression(arg);
+}
 
 function parseProgram(text) {
     cpu.program = [];
     cpu.labels = {};
+    cpu.equConstants = {};
+    cpu.flashBytes.fill(0);
     cpu.error = null;
     if (!text) return;
     text = text.replace(/\r/g, '');
@@ -708,34 +791,77 @@ function parseProgram(text) {
     }
 
     const lines = text.split('\n');
-    let instIndex = 0;
+
+    // ПЕРВЫЙ ПРОХОД: Сбор директив .equ
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        const sIdx = line.indexOf(';');
+        if (sIdx !== -1) line = line.substring(0, sIdx);
+        line = line.trim();
+        if (line.toLowerCase().startsWith('.equ')) {
+            const eqMatch = line.match(/\.equ\s+([a-zA-Z0-9_]+)\s*=\s*(.+)/i);
+            if (eqMatch) {
+                cpu.equConstants[eqMatch[1].trim()] = evaluateAsmExpression(eqMatch[2].trim());
+            }
+        }
+    }
+
+    // ВТОРОЙ ПРОХОД: Размещение векторов по .org, меток и строк .db
+    let wordIndex = 0;
 
     for (let i = 0; i < lines.length; i++) {
         let line = lines[i];
-        const semi = line.indexOf(';');
-        const slash = line.indexOf('//');
-        let idx = -1;
-        if (semi !== -1 && slash !== -1) idx = Math.min(semi, slash);
-        else if (semi !== -1) idx = semi;
-        else if (slash !== -1) idx = slash;
-        if (idx !== -1) line = line.substring(0, idx);
+        const sIdx = line.indexOf(';');
+        if (sIdx !== -1) line = line.substring(0, sIdx);
         line = line.trim();
         if (!line) continue;
 
+        // Директива .org (Адресация таблицы векторов)
         if (line.toLowerCase().startsWith('.org')) {
-            const orgVal = parseVal(line.substring(4).trim());
-            while (instIndex < orgVal) {
-                cpu.program.push({ op: 'nop', args: [], lineNum: i + 1, raw: 'nop' });
-                instIndex++;
+            const orgTarget = evaluateAsmExpression(line.substring(4).trim());
+            while (wordIndex < orgTarget) {
+                cpu.program[wordIndex] = { op: 'nop', args: [], lineNum: i + 1, raw: 'nop' };
+                wordIndex++;
             }
             continue;
         }
 
+        // Метки
         if (line.includes(':')) {
             const parts = line.split(':');
-            cpu.labels[parts[0].trim().toLowerCase()] = instIndex;
+            const lblName = parts[0].trim().toLowerCase();
+            cpu.labels[lblName] = wordIndex;
             line = parts.slice(1).join(':').trim();
             if (!line) continue;
+        }
+
+        // Директива строк .db в памяти программ (Тема 6, стр. 12)
+        if (line.toLowerCase().startsWith('.db')) {
+            const dataStr = line.substring(3).trim();
+            let bytePtr = wordIndex * 2; // Байт-адрес во Flash
+
+            // Разбор строк "Текст", 0x0A
+            const items = dataStr.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            for (let itm of items) {
+                itm = itm.trim();
+                if (itm.startsWith('"') && itm.endsWith('"')) {
+                    const strVal = itm.slice(1, -1);
+                    for (let c = 0; c < strVal.length; c++) {
+                        cpu.flashBytes[bytePtr++] = strVal.charCodeAt(c);
+                    }
+                } else if (itm === "'\\n'" || itm === "'\\r'") {
+                    cpu.flashBytes[bytePtr++] = 10;
+                } else {
+                    cpu.flashBytes[bytePtr++] = evaluateAsmExpression(itm) & 0xFF;
+                }
+            }
+            // Выравнивание wordIndex по заполненным байтам
+            const wordsUsed = Math.ceil((bytePtr - (wordIndex * 2)) / 2);
+            for (let w = 0; w < wordsUsed; w++) {
+                cpu.program[wordIndex + w] = { op: 'nop', args: [], lineNum: i + 1, raw: '.db' };
+            }
+            wordIndex += wordsUsed;
+            continue;
         }
 
         if (line.startsWith('.')) continue;
@@ -745,15 +871,15 @@ function parseProgram(text) {
         const argsStr = line.substring(tokens[0].length).trim();
         const args = argsStr ? argsStr.split(',').map(a => a.trim()) : [];
 
-        if (op === 'ldi' && args.length >= 1) {
-            const regNum = parseReg(args[0]);
-            if (regNum < 16) {
-                cpu.error = `Строка ${i + 1}: LDI работает только с R16..R31 (R${regNum} недопустим)`;
-            }
-        }
+        cpu.program[wordIndex] = { op, args, lineNum: i + 1, raw: line };
+        wordIndex++;
+    }
 
-        cpu.program.push({ op, args, lineNum: i + 1, raw: line });
-        instIndex++;
+    // Заполнение возможных дыр между org
+    for (let j = 0; j < cpu.program.length; j++) {
+        if (!cpu.program[j]) {
+            cpu.program[j] = { op: 'nop', args: [], lineNum: 1, raw: 'nop' };
+        }
     }
 }
 
@@ -764,25 +890,6 @@ function parseReg(arg) {
     if (aliases[arg] !== undefined) return aliases[arg];
     const clean = arg.replace(/[^0-9]/g, '');
     return Math.min(31, Math.max(0, parseInt(clean, 10) || 0));
-}
-
-function parseVal(arg) {
-    if (!arg) return 0;
-    arg = arg.trim().toLowerCase();
-    if (arg === 'ramend') return 0x08FF;
-    if (arg.includes('low(ramend)')) return 0xFF;
-    if (arg.includes('high(ramend)')) return 0x08;
-
-    const upper = arg.toUpperCase();
-    if (IO[upper] !== undefined) {
-        return IO[upper] < 0x60 ? IO[upper] - IO_OFFSET : IO[upper];
-    }
-
-    if (arg.startsWith('$')) return parseInt(arg.substring(1), 16) || 0;
-    if (arg.startsWith('0x')) return parseInt(arg.substring(2), 16) || 0;
-    if (arg.startsWith('0b')) return parseInt(arg.substring(2), 2) || 0;
-    const dec = parseInt(arg, 10);
-    return isNaN(dec) ? 0 : dec;
 }
 
 function resolveIoRamAddr(token) {
@@ -799,7 +906,6 @@ function resolveDataRamAddr(token) {
     return IO[upper] !== undefined ? IO[upper] : parseVal(token);
 }
 
-// БАГ 14: Проверка существования метки с установкой ошибки
 function resolveLabel(target, lineNum) {
     if (!target) return null;
     const key = target.trim().toLowerCase();
@@ -811,19 +917,19 @@ function resolveLabel(target, lineNum) {
 }
 
 /* =========================================================
-   5. ДОСТУП К ПАМЯТИ, СТЕК И РЕГИСТРЫ (БАГИ 9, 11, 12)
+   5. ПАМЯТЬ ОЗУ, СТЕК И ОЧЕРЕДЬ UART (БАГИ 9, 11, 12)
    ========================================================= */
 
 function writeRAM(addr, val) {
     val &= 0xFF;
     if (addr < 0 || addr >= cpu.ram.length) return;
 
-    // БАГ 12: Запись в PINx инвертирует соответствующие биты PORTx
+    // Запись в PINx инвертирует биты PORTx
     if (addr === IO.PINB) { writeRAM(IO.PORTB, readRAM(IO.PORTB) ^ val); return; }
     if (addr === IO.PINC) { writeRAM(IO.PORTC, readRAM(IO.PORTC) ^ val); return; }
     if (addr === IO.PIND) { writeRAM(IO.PORTD, readRAM(IO.PORTD) ^ val); return; }
 
-    // БАГ 9: Регистры флагов EIFR и PCIFR сбрасываются записью единицы (write 1 to clear)
+    // Сброс EIFR и PCIFR записью единицы (write 1 to clear)
     if (addr === IO.EIFR || addr === IO.PCIFR) {
         cpu.ram[addr] &= ~val;
         return;
@@ -834,16 +940,31 @@ function writeRAM(addr, val) {
 
     if (addr === IO.SPL) cpu.sp = (cpu.sp & 0xFF00) | val;
     else if (addr === IO.SPH) cpu.sp = (cpu.sp & 0x00FF) | (val << 8);
-    // БАГ 11: Запись в UDR0 выставляет флаги UDRE0 и TXC0 в UCSR0A
+
+    // Передача по UART: вывод в терминал и установка флагов UDRE0 и TXC0
     else if (addr === IO.UDR0) {
         cpu.uartLog += String.fromCharCode(val);
-        cpu.ram[IO.UCSR0A] |= (1 << 5) | (1 << 6);
+        cpu.ram[IO.UCSR0A] |= (1 << 5) | (1 << 6); // UDRE0=1, TXC0=1
         appendUartTerminal(String.fromCharCode(val));
     }
 }
 
 function readRAM(addr) {
     if (addr >= 0 && addr < 32) return cpu.r[addr];
+
+    // Чтение регистра данных UART (UDR0): считывание из очереди RX
+    if (addr === IO.UDR0) {
+        if (cpu.rxBuffer.length > 0) {
+            const b = cpu.rxBuffer.shift();
+            if (cpu.rxBuffer.length === 0) {
+                cpu.ram[IO.UCSR0A] &= ~(1 << 7); // Сброс флага RXC0 (буфер опустошен)
+            }
+            return b;
+        }
+        cpu.ram[IO.UCSR0A] &= ~(1 << 7);
+        return 0;
+    }
+
     if (addr >= 0 && addr < cpu.ram.length) return cpu.ram[addr];
     return 0;
 }
@@ -874,17 +995,16 @@ function setPointerAddr(name, val) {
     else if (name.includes('z')) { cpu.r[30] = val & 0xFF; cpu.r[31] = (val >> 8) & 0xFF; }
 }
 
-// БАГ 3: Защита от 2-словных команд при пропуске (sbrs, sbrc, cpse)
 function isTwoWordInstruction(inst) {
     if (!inst) return false;
     return ['jmp', 'call', 'lds', 'sts'].includes(inst.op.toLowerCase());
 }
 
 /* =========================================================
-   6. ТОЧНЫЕ ФЛАГИ АЛУ ПО СПЕЦИФИКАЦИИ ATMEL (БАГИ 1, 2, 4)
+   6. ФЛАГИ АЛУ ПО СПЕЦИФИКАЦИИ ATMEL
    ========================================================= */
 
-function setFlagsAdd(a, b, res, carryIn = 0) {
+function setFlagsAdd(a, b, res) {
     const Rd3 = (a >> 3) & 1, Rr3 = (b >> 3) & 1, R3 = (res >> 3) & 1;
     const Rd7 = (a >> 7) & 1, Rr7 = (b >> 7) & 1, R7 = (res >> 7) & 1;
 
@@ -896,14 +1016,13 @@ function setFlagsAdd(a, b, res, carryIn = 0) {
     cpu.sreg.S = cpu.sreg.N ^ cpu.sreg.V;
 }
 
-function setFlagsSub(a, b, res, carryIn = 0, isSbc = false) {
+function setFlagsSub(a, b, res, isSbc = false) {
     const Rd3 = (a >> 3) & 1, Rr3 = (b >> 3) & 1, R3 = (res >> 3) & 1;
     const Rd7 = (a >> 7) & 1, Rr7 = (b >> 7) & 1, R7 = (res >> 7) & 1;
 
     cpu.sreg.H = ((!Rd3 & Rr3) | (Rr3 & R3) | (R3 & !Rd3)) ? 1 : 0;
     cpu.sreg.C = ((!Rd7 & Rr7) | (Rr7 & R7) | (R7 & !Rd7)) ? 1 : 0;
     
-    // Для SBC/SBCI Z сохраняет 0, если был 0
     if (isSbc) {
         cpu.sreg.Z = (((res & 0xFF) === 0) && cpu.sreg.Z) ? 1 : 0;
     } else {
@@ -923,7 +1042,7 @@ function setFlagsLogic(val) {
 }
 
 /* =========================================================
-   7. ОБРАБОТЧИК ПРЕРЫВАНИЙ (БАГИ 8, 9, 10)
+   7. ДИСПЕТЧЕР ПРЕРЫВАНИЙ (ТЕМА 5 И ТЕМА 6)
    ========================================================= */
 
 function applyHardwarePins() {
@@ -941,7 +1060,6 @@ function applyHardwarePins() {
     const ddrd = readRAM(IO.DDRD), portd = readRAM(IO.PORTD);
     const ddrc = readRAM(IO.DDRC), portc = readRAM(IO.PORTC);
 
-    // Модель внутренней подтяжки (Pull-Up) и выходов
     pinb = (pinb & ~ddrb) | (portb & ddrb);
     pind = (pind & ~ddrd) | (portd & ddrd);
     pinc = (pinc & ~ddrc) | (portc & ddrc);
@@ -958,17 +1076,18 @@ function checkInterrupts() {
     let eifr = readRAM(IO.EIFR);
     let pcifr = readRAM(IO.PCIFR);
 
-    // Внешнее прерывание INT0 (PD2)
+    // --- 1. ВНЕШНЕЕ ПРЕРЫВАНИЕ INT0 (PD2) ---
     const isc0 = eicra & 0x03;
     const pd2Now = (curPind >> 2) & 1;
     const pd2Prev = (cpu.prevPinD >> 2) & 1;
 
+    // ISC0 = 00: Низкий уровень (Тема 5, Пример 1)
     if (isc0 === 0 && pd2Now === 0) eifr |= (1 << 0);
     else if (isc0 === 1 && pd2Now !== pd2Prev) eifr |= (1 << 0);
     else if (isc0 === 2 && pd2Prev === 1 && pd2Now === 0) eifr |= (1 << 0);
     else if (isc0 === 3 && pd2Prev === 0 && pd2Now === 1) eifr |= (1 << 0);
 
-    // Внешнее прерывание INT1 (PD3)
+    // --- 2. ВНЕШНЕЕ ПРЕРЫВАНИЕ INT1 (PD3) ---
     const isc1 = (eicra >> 2) & 0x03;
     const pd3Now = (curPind >> 3) & 1;
     const pd3Prev = (cpu.prevPinD >> 3) & 1;
@@ -980,64 +1099,95 @@ function checkInterrupts() {
 
     cpu.ram[IO.EIFR] = eifr;
 
-    // Pin Change прерывания PCINT0 и PCINT2
+    // --- 3. ПРЕРЫВАНИЯ PIN CHANGE (PCINT0, PCINT1, PCINT2) ---
     const pcmsk0 = readRAM(IO.PCMSK0);
+    const pcmsk1 = readRAM(IO.PCMSK1);
     const pcmsk2 = readRAM(IO.PCMSK2);
     if ((curPinb ^ cpu.prevPinB) & pcmsk0) pcifr |= (1 << 0);
+    if ((readRAM(IO.PINC) ^ cpu.prevPinC) & pcmsk1) pcifr |= (1 << 1);
     if ((curPind ^ cpu.prevPinD) & pcmsk2) pcifr |= (1 << 2);
     cpu.ram[IO.PCIFR] = pcifr;
 
-    // Фиксация предыдущих уровней для следующего шага
     cpu.prevPinB = curPinb;
     cpu.prevPinC = readRAM(IO.PINC);
     cpu.prevPinD = curPind;
 
-    // Вызов обработчика при взведенном глобальном флаге I
+    // --- 4. ПРОВЕРКА И ПРИОРИТЕТНЫЙ ВЫЗОВ (ПРИ SREG.I == 1) ---
     if (cpu.sreg.I === 1) {
         const eimsk = readRAM(IO.EIMSK);
         const pcicr = readRAM(IO.PCICR);
+        const ucsrb = readRAM(IO.UCSR0B);
+        const ucsra = readRAM(IO.UCSR0A);
 
+        // Приоритет 1: INT0
         if ((eimsk & 0x01) && (eifr & 0x01)) {
-            cpu.ram[IO.EIFR] &= ~0x01;
-            dispatchInterrupt('__vector_int0', 0x0002);
+            if (isc0 !== 0) cpu.ram[IO.EIFR] &= ~0x01;
+            dispatchInterrupt(VECTORS.INT0, '__vector_int0');
             return;
         }
+        // Приоритет 2: INT1
         if ((eimsk & 0x02) && (eifr & 0x02)) {
-            cpu.ram[IO.EIFR] &= ~0x02;
-            dispatchInterrupt('__vector_int1', 0x0004);
+            if (isc1 !== 0) cpu.ram[IO.EIFR] &= ~0x02;
+            dispatchInterrupt(VECTORS.INT1, '__vector_int1');
             return;
         }
+        // Приоритет 3: PCINT0
         if ((pcicr & 0x01) && (pcifr & 0x01)) {
             cpu.ram[IO.PCIFR] &= ~0x01;
-            dispatchInterrupt('__vector_pcint0', 0x0006);
+            dispatchInterrupt(VECTORS.PCINT0, '__vector_pcint0');
             return;
         }
+        // Приоритет 4: PCINT1
+        if ((pcicr & 0x02) && (pcifr & 0x02)) {
+            cpu.ram[IO.PCIFR] &= ~0x02;
+            dispatchInterrupt(VECTORS.PCINT1, '__vector_pcint1');
+            return;
+        }
+        // Приоритет 5: PCINT2
         if ((pcicr & 0x04) && (pcifr & 0x04)) {
             cpu.ram[IO.PCIFR] &= ~0x04;
-            dispatchInterrupt('__vector_pcint2', 0x000A);
+            dispatchInterrupt(VECTORS.PCINT2, '__vector_pcint2');
+            return;
+        }
+        // Приоритет 6: UART RX Complete (Тема 6, стр. 13)
+        if ((ucsrb & (1 << 7)) && (ucsra & (1 << 7))) {
+            dispatchInterrupt(VECTORS.USART_RX, '__vector_usart_rx');
+            return;
+        }
+        // Приоритет 7: UART Data Register Empty
+        if ((ucsrb & (1 << 5)) && (ucsra & (1 << 5))) {
+            dispatchInterrupt(VECTORS.USART_UDRE, '__vector_usart_udre');
+            return;
+        }
+        // Приоритет 8: UART TX Complete
+        if ((ucsrb & (1 << 6)) && (ucsra & (1 << 6))) {
+            cpu.ram[IO.UCSR0A] &= ~(1 << 6);
+            dispatchInterrupt(VECTORS.USART_TX, '__vector_usart_tx');
             return;
         }
     }
 }
 
-function dispatchInterrupt(vectorLabel, vectorAddr) {
+// Переход к обработчику прерывания: поддержка адресов векторов (.org) и меток C
+function dispatchInterrupt(vectorWordAddr, vectorLabel) {
     pushStack(cpu.pc & 0xFF);
     pushStack((cpu.pc >> 8) & 0xFF);
-    cpu.sreg.I = 0;
+    cpu.sreg.I = 0; // Аппаратный запрет дальнейших прерываний
 
-    if (cpu.labels[vectorLabel] !== undefined) {
+    if (currentLang === 'c' && cpu.labels[vectorLabel] !== undefined) {
         cpu.pc = cpu.labels[vectorLabel];
-    } else if (cpu.program[vectorAddr]) {
-        cpu.pc = vectorAddr;
+    } else if (cpu.program[vectorWordAddr]) {
+        cpu.pc = vectorWordAddr;
+    } else if (cpu.labels[vectorLabel] !== undefined) {
+        cpu.pc = cpu.labels[vectorLabel];
     }
 }
 
 /* =========================================================
-   8. ЦИКЛ ВЫПОЛНЕНИЯ И СИСТЕМА КОМАНД (БАГИ 1..7, 13, 14)
+   8. ВЫПОЛНЕНИЕ ИНСТРУКЦИЙ (ПОЛНЫЙ НАБОР: BST, BLD, LPM, SBI, CBI)
    ========================================================= */
 
 function cpuStep(silent = false) {
-    // БАГ 6: Защита от undefined и выхода за границы памяти
     if (cpu.pc < 0) cpu.pc = 0;
     if (cpu.error) { haltExecution(); if (!silent) updateUI(); return; }
 
@@ -1057,7 +1207,7 @@ function cpuStep(silent = false) {
     if (op === 'break') { haltExecution(); if (!silent) updateUI(); return; }
 
     switch (op) {
-        // --- 1. ПЕРЕСЫЛКА ДАННЫХ ---
+        // --- ПЕРЕСЫЛКА ДАННЫХ И LPM ---
         case 'ldi': { cpu.r[parseReg(a[0])] = parseVal(a[1]) & 0xFF; break; }
         case 'mov': { cpu.r[parseReg(a[0])] = cpu.r[parseReg(a[1])]; break; }
         case 'in':  { cpu.r[parseReg(a[0])] = readRAM(resolveIoRamAddr(a[1])); break; }
@@ -1083,7 +1233,67 @@ function cpuStep(silent = false) {
         case 'clr':  { cpu.r[parseReg(a[0])] = 0; setFlagsLogic(0); break; }
         case 'ser':  { cpu.r[parseReg(a[0])] = 0xFF; break; }
 
-        // --- 2. АРИФМЕТИКА И ЛОГИКА (БАГИ 2 И 4) ---
+        // Чтение Flash-памяти программ LPM (Тема 6, стр. 12)
+        case 'lpm': {
+            let destReg = 0;
+            let isPostInc = false;
+            if (a.length >= 1) destReg = parseReg(a[0]);
+            if (a.length >= 2 && a[1].includes('+')) isPostInc = true;
+
+            const zAddr = getPointerAddr('z');
+            cpu.r[destReg] = cpu.flashBytes[zAddr] || 0;
+            if (isPostInc) setPointerAddr('z', zAddr + 1);
+            break;
+        }
+
+        // --- БИТОВЫЕ ОПЕРАЦИИ С ПОРТАМИ И РЕГИСТРОМ SREG ---
+        // bst Rd, b: сохранить b-й бит регистра Rd во флаг T (Тема 6, стр. 12)
+        case 'bst': {
+            const reg = parseReg(a[0]);
+            const bit = parseVal(a[1]);
+            cpu.sreg.T = (cpu.r[reg] >> bit) & 1;
+            break;
+        }
+        // bld Rd, b: загрузить флаг T в b-й бит регистра Rd
+        case 'bld': {
+            const reg = parseReg(a[0]);
+            const bit = parseVal(a[1]);
+            if (cpu.sreg.T) cpu.r[reg] |= (1 << bit);
+            else cpu.r[reg] &= ~(1 << bit);
+            break;
+        }
+        // sbi: установить бит в порту ввода-вывода (Тема 5, Пример 1: sbi portd, 3)
+        case 'sbi': {
+            const addr = resolveIoRamAddr(a[0]);
+            const bit = parseVal(a[1]);
+            writeRAM(addr, readRAM(addr) | (1 << bit));
+            break;
+        }
+        // cbi: сбросить бит в порту ввода-вывода (Тема 5, Пример 1: cbi ddrd, 3)
+        case 'cbi': {
+            const addr = resolveIoRamAddr(a[0]);
+            const bit = parseVal(a[1]);
+            writeRAM(addr, readRAM(addr) & ~(1 << bit));
+            break;
+        }
+        case 'sbis': {
+            const addr = resolveIoRamAddr(a[0]);
+            const bit = parseVal(a[1]);
+            if ((readRAM(addr) & (1 << bit)) !== 0) {
+                nextPC += isTwoWordInstruction(cpu.program[nextPC]) ? 2 : 1;
+            }
+            break;
+        }
+        case 'sbic': {
+            const addr = resolveIoRamAddr(a[0]);
+            const bit = parseVal(a[1]);
+            if ((readRAM(addr) & (1 << bit)) === 0) {
+                nextPC += isTwoWordInstruction(cpu.program[nextPC]) ? 2 : 1;
+            }
+            break;
+        }
+
+        // --- АРИФМЕТИКА И ЛОГИКА ---
         case 'add': {
             const r1 = parseReg(a[0]), r2 = parseReg(a[1]);
             const res = cpu.r[r1] + cpu.r[r2];
@@ -1092,9 +1302,8 @@ function cpuStep(silent = false) {
         }
         case 'adc': {
             const r1 = parseReg(a[0]), r2 = parseReg(a[1]);
-            const c = cpu.sreg.C;
-            const res = cpu.r[r1] + cpu.r[r2] + c;
-            setFlagsAdd(cpu.r[r1], cpu.r[r2], res, c);
+            const res = cpu.r[r1] + cpu.r[r2] + cpu.sreg.C;
+            setFlagsAdd(cpu.r[r1], cpu.r[r2], res);
             cpu.r[r1] = res & 0xFF; break;
         }
         case 'sub': {
@@ -1111,16 +1320,14 @@ function cpuStep(silent = false) {
         }
         case 'sbc': {
             const r1 = parseReg(a[0]), r2 = parseReg(a[1]);
-            const c = cpu.sreg.C;
-            const res = cpu.r[r1] - cpu.r[r2] - c;
-            setFlagsSub(cpu.r[r1], cpu.r[r2], res, c, true);
+            const res = cpu.r[r1] - cpu.r[r2] - cpu.sreg.C;
+            setFlagsSub(cpu.r[r1], cpu.r[r2], res, true);
             cpu.r[r1] = res & 0xFF; break;
         }
         case 'sbci': {
             const r1 = parseReg(a[0]), k = parseVal(a[1]) & 0xFF;
-            const c = cpu.sreg.C;
-            const res = cpu.r[r1] - k - c;
-            setFlagsSub(cpu.r[r1], k, res, c, true);
+            const res = cpu.r[r1] - k - cpu.sreg.C;
+            setFlagsSub(cpu.r[r1], k, res, true);
             cpu.r[r1] = res & 0xFF; break;
         }
         case 'inc': {
@@ -1144,7 +1351,6 @@ function cpuStep(silent = false) {
             cpu.sreg.S = cpu.sreg.N ^ cpu.sreg.V; break;
         }
         case 'neg': {
-            // БАГ 2: Точный расчет V, S, H для neg
             const reg = parseReg(a[0]);
             const val = cpu.r[reg];
             const res = (0 - val) & 0xFF;
@@ -1188,9 +1394,7 @@ function cpuStep(silent = false) {
             cpu.r[r1] ^= cpu.r[parseReg(a[1])];
             setFlagsLogic(cpu.r[r1]); break;
         }
-        case 'tst': {
-            setFlagsLogic(cpu.r[parseReg(a[0])]); break;
-        }
+        case 'tst': { setFlagsLogic(cpu.r[parseReg(a[0])]); break; }
         case 'lsl': {
             const reg = parseReg(a[0]);
             const prev = cpu.r[reg];
@@ -1251,7 +1455,7 @@ function cpuStep(silent = false) {
             cpu.sreg.S = cpu.sreg.N ^ cpu.sreg.V; break;
         }
 
-        // 16-битная арифметика для пар (r24, X, Y, Z)
+        // 16-битные операции adiw / sbiw (r24, X, Y, Z)
         case 'adiw': {
             const rLow = parseReg(a[0]);
             const k = parseVal(a[1]) & 0x3F;
@@ -1279,7 +1483,7 @@ function cpuStep(silent = false) {
             cpu.sreg.S = cpu.sreg.N ^ cpu.sreg.V; break;
         }
 
-        // --- 3. СРАВНЕНИЯ И ПРОПУСКИ (БАГИ 3 И 4) ---
+        // --- СРАВНЕНИЯ И ПРОПУСКИ ---
         case 'cp': {
             setFlagsSub(cpu.r[parseReg(a[0])], cpu.r[parseReg(a[1])], cpu.r[parseReg(a[0])] - cpu.r[parseReg(a[1])]);
             break;
@@ -1308,7 +1512,7 @@ function cpuStep(silent = false) {
             break;
         }
 
-        // --- 4. ПЕРЕХОДЫ И ПОДПРОГРАММЫ (БАГ 14) ---
+        // --- ПЕРЕХОДЫ И ПОДПРОГРАММЫ ---
         case 'jmp':
         case 'rjmp': {
             const target = resolveLabel(a[0], inst.lineNum);
@@ -1336,7 +1540,7 @@ function cpuStep(silent = false) {
             cpu.sreg.I = 1; break;
         }
 
-        // Условные ветвления по флагам (БАГИ 1 И 4)
+        // Ветвления по флагам (включая brts и brtc по флагу T)
         case 'breq': { if (cpu.sreg.Z === 1) nextPC = resolveLabel(a[0], inst.lineNum) ?? nextPC; break; }
         case 'brne': { if (cpu.sreg.Z === 0) nextPC = resolveLabel(a[0], inst.lineNum) ?? nextPC; break; }
         case 'brcs':
@@ -1354,7 +1558,7 @@ function cpuStep(silent = false) {
         case 'brvs': { if (cpu.sreg.V === 1) nextPC = resolveLabel(a[0], inst.lineNum) ?? nextPC; break; }
         case 'brvc': { if (cpu.sreg.V === 0) nextPC = resolveLabel(a[0], inst.lineNum) ?? nextPC; break; }
 
-        // --- 5. УПРАВЛЕНИЕ ФЛАГАМИ SREG (БАГ 1) ---
+        // Прямое управление битами SREG
         case 'sec': { cpu.sreg.C = 1; break; }
         case 'clc': { cpu.sreg.C = 0; break; }
         case 'sez': { cpu.sreg.Z = 1; break; }
@@ -1376,13 +1580,12 @@ function cpuStep(silent = false) {
     }
 
     cpu.pc = nextPC;
-    cpu.cycles += CYCLES[op] || 1; // БАГ 13: Точный учет тактов
+    cpu.cycles += CYCLES[op] || 1;
 
     syncHardwareState();
     checkInterrupts();
     recordAnalyzerSample();
 
-    // БАГ 7: Отрисовка UI вызывается только вне режима silent
     if (!silent) updateUI();
 
     if (cpu.running && cpu.pc < cpu.program.length) {
@@ -1394,7 +1597,7 @@ function cpuStep(silent = false) {
 }
 
 /* =========================================================
-   9. АППАРАТНАЯ СИНХРОНИЗАЦИЯ И СВЕТОДИОДЫ
+   9. АППАРАТНАЯ СИНХРОНИЗАЦИЯ, СВЕТОДИОДЫ И UART
    ========================================================= */
 
 function toggleVButton(id) {
@@ -1403,7 +1606,6 @@ function toggleVButton(id) {
     btn.pressed = !btn.pressed;
     document.getElementById('vbtn_' + id)?.classList.toggle('latched', btn.pressed);
 
-    // БАГ 10: Сохранение фронтов до смены состояния
     syncHardwareState();
     checkInterrupts();
     recordAnalyzerSample();
@@ -1433,13 +1635,10 @@ function selectLedPort(portLetter) {
 }
 
 function renderHardware() {
-    // Встроенный светодиод L на PB5 (светится, если DDR=1 и PORT=1)
-    const ddrb = readRAM(IO.DDRB), portb = readRAM(IO.PORTB);
-    const isPB5On = (portb & (1 << 5)) !== 0;
+    const portb = readRAM(IO.PORTB);
     const ledPB5 = document.getElementById('ledPB5');
-    if (ledPB5) ledPB5.className = 'led-light ' + (isPB5On ? 'active-led-yellow' : '');
+    if (ledPB5) ledPB5.className = 'led-light ' + ((portb & (1 << 5)) ? 'active-led-yellow' : '');
 
-    // TX и RX индикаторы на PD1 и PD0
     const portd = readRAM(IO.PORTD);
     const ledTX = document.getElementById('ledTX');
     if (ledTX) ledTX.className = 'led-light ' + ((portd & (1 << 1)) ? 'active-led-green' : '');
@@ -1476,20 +1675,26 @@ function clearUart() {
     if (term) term.textContent = "UART очищен.";
 }
 
+// Прием символов в виртуальный UDR0 (Тема 6, стр. 13-14)
 function sendUartInput() {
     const inp = document.getElementById('serialInput');
     if (!inp || !inp.value) return;
     const text = inp.value;
     inp.value = '';
 
-    // Передача строки в виртуальный буфер UART приемника
     for (let i = 0; i < text.length; i++) {
-        writeRAM(IO.UDR0, text.charCodeAt(i));
+        cpu.rxBuffer.push(text.charCodeAt(i));
     }
+
+    // Установка бита RXC0 (есть непрочитанные данные в UDR0)
+    cpu.ram[IO.UCSR0A] |= (1 << 7);
+
+    checkInterrupts();
+    updateUI();
 }
 
 /* =========================================================
-   10. РЕАЛЬНЫЙ WEB SERIAL API (БАГИ 17 И 18)
+   10. РЕАЛЬНЫЙ WEB SERIAL API (С ИМПУЛЬСОМ DTR)
    ========================================================= */
 
 window._serialPort = null;
@@ -1497,7 +1702,7 @@ window._serialPort = null;
 async function connectRealWebSerial() {
     const btn = document.getElementById('btnWebSerial');
     if (!('serial' in navigator)) {
-        alert('Web Serial API не поддерживается вашим браузером. Откройте симулятор в Chrome, Edge или Opera.');
+        alert('Web Serial API не поддерживается данным браузером. Используйте Chrome, Edge или Opera.');
         return;
     }
 
@@ -1506,7 +1711,7 @@ async function connectRealWebSerial() {
         await port.open({ baudRate: 115200 });
         window._serialPort = port;
 
-        // БАГ 17: Формирование честного импульса сброса DTR для Arduino Optiboot
+        // DTR-сброс для перезагрузки Arduino
         await port.setSignals({ dataTerminalReady: false });
         await new Promise(r => setTimeout(r, 50));
         await port.setSignals({ dataTerminalReady: true });
@@ -1518,7 +1723,6 @@ async function connectRealWebSerial() {
             btn.textContent = '🟢 COM Подключен';
         }
 
-        // Фоновое чтение реального UART в виртуальный терминал
         const reader = port.readable.getReader();
         (async () => {
             try {
@@ -1527,8 +1731,11 @@ async function connectRealWebSerial() {
                     if (done) break;
                     if (value) {
                         for (let byte of value) {
-                            writeRAM(IO.UDR0, byte);
+                            cpu.rxBuffer.push(byte);
                         }
+                        cpu.ram[IO.UCSR0A] |= (1 << 7);
+                        checkInterrupts();
+                        updateUI();
                     }
                 }
             } catch (e) {
@@ -1539,7 +1746,7 @@ async function connectRealWebSerial() {
         })();
 
     } catch (err) {
-        alert('Не удалось подключить COM-порт: ' + err.message);
+        alert('Ошибка подключения COM-порта: ' + err.message);
         if (btn) {
             btn.classList.remove('connected');
             btn.textContent = '🌐 Подключить COM';
@@ -1548,7 +1755,7 @@ async function connectRealWebSerial() {
 }
 
 /* =========================================================
-   11. ИСПОЛНЯЕМЫЙ ЦИКЛ RUNLOOP (БАГ 7: 60 FPS БЕЗ ЛАГОВ)
+   11. ИСПОЛНЯЕМЫЙ ЦИКЛ RUNLOOP (60 FPS)
    ========================================================= */
 
 function haltExecution() {
@@ -1589,7 +1796,6 @@ function runLoop() {
         batchSize = Math.max(1, Math.round(cpu.speed / 25));
     }
 
-    // БАГ 7: Пакетный расчет через cpuStep(true) без постоянного дерганья тяжелого DOM
     for (let i = 0; i < batchSize; i++) {
         cpuStep(true);
         if (!cpu.running || cpu.error) {
@@ -1598,7 +1804,6 @@ function runLoop() {
         }
     }
 
-    // Единый вызов рендера на весь анимационный кадр
     updateUI();
 
     if (cpu.running) {
@@ -1615,14 +1820,14 @@ function cpuReset() {
     cpu.sp = 0x08FF;
     cpu.cycles = 0;
     cpu.sreg = { C:0, Z:0, N:0, V:0, S:0, H:0, T:0, I:0 };
+    cpu.rxBuffer = [];
     cpu.uartLog = "";
 
-    // БАГ 8: Обязательный сброс предыдущих уровней пинов
     cpu.prevPinB = 0xFF;
     cpu.prevPinC = 0xFF;
     cpu.prevPinD = 0xFF;
 
-    // БАГ 11: UDRE0 = 1 по умолчанию в UCSR0A (буфер готов)
+    // Начальное состояние UART (UDRE0 = 1, буфер пуст)
     cpu.ram[IO.UCSR0A] = (1 << 5);
 
     vButtons.forEach(btn => {
@@ -1705,7 +1910,6 @@ function updateUI() {
     document.getElementById('valY').textContent = '0x' + getPointerAddr('y').toString(16).padStart(4, '0').toUpperCase();
     document.getElementById('valZ').textContent = '0x' + getPointerAddr('z').toString(16).padStart(4, '0').toUpperCase();
 
-    // БАГ 1: Отображение всех 8 флагов SREG, включая T
     const fGrid = document.getElementById('flagsGrid');
     if (fGrid) {
         fGrid.innerHTML = ['I','T','H','S','V','N','Z','C'].map(f => 
@@ -1732,7 +1936,7 @@ function updateUI() {
 }
 
 /* =========================================================
-   13. ПОДСВЕТКА СИНТАКСИСА И РЕДАКТОР (БАГ 5)
+   13. ПОДСВЕТКА СИНТАКСИСА И РЕДАКТОР (С KNOWN_OPS)
    ========================================================= */
 
 function escapeHtml(text) {
@@ -1755,21 +1959,21 @@ function highlightCode(rawText) {
             }
 
             let p = escapeHtml(codePart)
-                .replace(/\b(uint8_t|int8_t|uint16_t|int16_t|uint32_t|int|void)\b/g, '<span class="syn-type">$1</span>')
+                .replace(/\b(uint8_t|int8_t|uint16_t|int16_t|uint32_t|int|char|void)\b/g, '<span class="syn-type">$1</span>')
                 .replace(/\b(while|for|if|else|return|break|ISR)\b/g, '<span class="syn-kw">$1</span>')
                 .replace(/(#define|#include)/g, '<span class="syn-dir">$1</span>')
-                .replace(/\b(DDR[BCD]|PORT[BCD]|PIN[BCD]|UDR0|EICRA|EIMSK|PCICR|PCMSK[0-2]|_delay_ms)\b/g, '<span class="syn-op">$1</span>')
+                .replace(/\b(DDR[BCD]|PORT[BCD]|PIN[BCD]|UDR0|EICRA|EIMSK|PCICR|PCMSK[0-2]|UCSR0[ABC]|UBRR0[LH]|_delay_ms)\b/g, '<span class="syn-op">$1</span>')
                 .replace(/\b(\$[0-9a-fA-F]+|0x[0-9a-fA-F]+|0b[01]+|-?\d+)\b/g, '<span class="syn-num">$1</span>');
 
             return p + (comment ? `<span class="syn-com">${escapeHtml(comment)}</span>` : '');
         }).join('\n');
     }
 
-    // БАГ 5: Расширенный набор мнемоник KNOWN_OPS для подсветки
     const KNOWN_OPS = new Set([
         'ldi','mov','add','adc','sub','subi','sbc','sbci','inc','dec','lsl','lsr','asr','rol','ror',
         'neg','com','and','andi','or','ori','eor','tst','clr','ser','cpi','cp','cpse','sbrs','sbrc',
         'sec','clc','sez','clz','sen','cln','sev','clv','ses','cls','seh','clh','set','clt',
+        'bst','bld','sbi','cbi','sbis','sbic','lpm',
         'adiw','sbiw','st','ld','sts','lds','push','pop','jmp','rjmp','breq','brne','brcs','brcc',
         'brlo','brsh','brmi','brpl','brge','brlt','brhs','brhc','brts','brtc','brvs','brvc',
         'call','ret','reti','sei','cli','in','out','break','nop'
@@ -1828,7 +2032,7 @@ function setPcToLine(targetLine) {
     haltExecution();
     let targetIdx = -1;
     for (let i = 0; i < cpu.program.length; i++) {
-        if (cpu.program[i].lineNum >= targetLine) {
+        if (cpu.program[i]?.lineNum >= targetLine) {
             targetIdx = i;
             break;
         }
@@ -1870,155 +2074,245 @@ function clearEditor() {
 }
 
 /* =========================================================
-   14. БАЗА ПРИМЕРОВ ПРОГРАММ (C И ASM)
+   14. ПРИМЕРЫ ИЗ МЕТОДИЧЕК (ТЕМА 5 И ТЕМА 6)
    ========================================================= */
 
 const PROGRAMS = {
+    // ТЕМА 5: ПРИМЕР 1 НА ASM (Стр. 11: Прерывание INT1 по низкому уровню, сброс r17)
+    lab5_asm_int1: {
+        hint: "Тема 5, Пример 1 (ASM): Прерывание INT1 по низкому уровню сигнала на PD3 (K2). Сбрасывает счетчик в 0.",
+        lang: "asm",
+        code: `; Тема 5. Пример 1: Прерывание INT1 по низкому уровню
+.include "m328pdef.inc"
+.org 0
+jmp Reset
+.org 0x004
+jmp Int_1
+
+Reset:
+ldi r16, High(RAMEND)
+out sph, r16
+ldi r16, Low(RAMEND)
+out spl, r16
+ldi r16, 0x00
+sts EICRA, r16       ; Прерывание INT1 по низкому уровню
+ldi r16, 0x02
+out EIMSK, r16       ; Разрешение INT1
+cbi ddrd, 3          ; PD3 на ввод
+sbi portd, 3         ; Подтяжка PULL-UP на PD3
+ldi r16, 0xff
+out ddrc, r16        ; Порт C на вывод
+sei
+
+main:
+inc r17
+out portc, r17
+jmp main
+
+Int_1:
+ldi r17, 0x00        ; Сброс кода при прерывании
+out portc, r17
+reti`
+    },
+
+    // ТЕМА 5: ПРИМЕР 1 НА C (Стр. 14)
     c_interrupt_int0: {
-        hint: "Нажатие кнопки K1 (PD2, INT0) вызывает прерывание по спаду, инвертируя светодиоды RX и TX.",
+        hint: "Тема 5, Пример 1 (C): Обработка внешнего прерывания INT1_vect. При зажатии кнопки K2 (PD3) счетчик сбрасывается.",
         lang: "c",
-        code: `// Внешнее прерывание INT0 по спаду (нажатие K1 на PD2)
-#include <avr/io.h>
+        code: `#include <avr/io.h>
 #include <avr/interrupt.h>
 
-ISR(INT0_vect)
+int x;
+
+ISR(INT1_vect)
 {
-    // Инвертируем состояние линий PD0 (RX) и PD1 (TX) при прерывании
-    PORTD ^= (1 << PORTD0) | (1 << PORTD1);
+    PORTC = 0x00;
 }
 
 int main(void)
 {
-    EICRA = (1 << ISC01);
-    EIMSK = (1 << INT0);
-
-    DDRD |= (1 << DDD0) | (1 << DDD1);
-    DDRD &= ~(1 << DDD2);
-    PORTD |= (1 << PORTD2); 
-
+    x = 0;
+    EICRA = 0x00;   // Низкий уровень INT1
+    EIMSK = 0x02;   // Разрешение INT1
+    DDRD = 0x00;
+    PORTD = 0x08;   // Подтяжка на PD3
+    DDRC = 0xFF;
     sei();
-
-    while (1) { }
-}`
-    },
-
-    c_blink_counter: {
-        hint: "Мигание светодиодом PB5 через счетчик до 800 000 с вложенными ветками if-else.",
-        lang: "c",
-        code: `// Мигание встроенным светодиодом на плате (PB5) через счетчик
-#define F_CPU 16000000UL
-#include <avr/io.h>
-
-int main(void)
-{
-    DDRB |= (1 << DDB5);
-
-    uint32_t x = 0;
-    int flag = 0;
 
     while (1)
     {
-        if (x >= 800000)
-        {
-            if (flag == 0)
-            {
-                PORTB |= (1 << PORTB5);
-                flag = 1;
-            }
-            else
-            {
-                PORTB &= ~(1 << PORTB5);
-                flag = 0;
-            }
-            x = 0;
-        }
+        PORTC = x;
         x++;
     }
 }`
     },
 
-    c_zadanie5: {
-        hint: "Кнопки K1 (PD2), K2 (PD3), K3 (PD4) переключают светодиоды PD0 (RX), PD1 (TX) и PB5 (L).",
-        lang: "c",
-        code: `// Управление светодиодами кнопками-триггерами
-#define F_CPU 16000000UL
-#include <avr/io.h>
-#include <util/delay.h>
-
-int main(void)
-{
-    DDRD |= (1 << DDD0) | (1 << DDD1);
-    DDRB |= (1 << DDB5);
-
-    PORTD &= ~((1 << PORTD0) | (1 << PORTD1));
-    PORTB &= ~(1 << PORTB5);
-
-    DDRD &= ~((1 << DDD2) | (1 << DDD3) | (1 << DDD4));
-    PORTD |= (1 << PORTD2) | (1 << PORTD3) | (1 << PORTD4);
-
-    while (1)
-    {
-        if (!(PIND & (1 << PIND2)))
-        {
-            _delay_ms(40);
-            if (!(PIND & (1 << PIND2)))
-            {
-                PORTD ^= (1 << PORTD0);
-                while (!(PIND & (1 << PIND2)));
-                _delay_ms(40);
-            }
-        }
-
-        if (!(PIND & (1 << PIND3)))
-        {
-            _delay_ms(40);
-            if (!(PIND & (1 << PIND3)))
-            {
-                PORTD ^= (1 << PORTD1);
-                while (!(PIND & (1 << PIND3)));
-                _delay_ms(40);
-            }
-        }
-
-        if (!(PIND & (1 << PIND4)))
-        {
-            _delay_ms(40);
-            if (!(PIND & (1 << PIND4)))
-            {
-                PORTB ^= (1 << PORTB5);
-                while (!(PIND & (1 << PIND4)));
-                _delay_ms(40);
-            }
-        }
-    }
-}`
-    },
-
-    c_example3: {
-        hint: "Опрос кнопки K4 (PB0) и включение светодиода L (PB5) при нажатии.",
-        lang: "c",
-        code: `// Опрос кнопки PB0 (с подтяжкой) и включение светодиода L (PB5)
-#include <avr/io.h>
-
-int main(void)
-{
-    DDRB = 0x20;
-    PORTB |= 0x01;
-
-    while (1)
-    {
-        if ((PINB & 0x01) == 0)
-            PORTB |= 0x20;
-        else
-            PORTB &= ~0x20;
-    }
-}`
-    },
-
-    test_all: {
-        hint: "Комплексный тест: проверка всех флагов SREG (I, T, H, S, V, N, Z, C) и математики АЛУ.",
+    // ТЕМА 5: ПРИМЕР 2 НА ASM (Стр. 15: Прерывания PCINT0 и PCINT2, побитовое определение кнопки)
+    lab5_asm_pcint: {
+        hint: "Тема 5, Пример 2 (ASM): Прерывания PCINT0 и PCINT2 с анализом бита через EOR.",
         lang: "asm",
-        code: `; Комплексный тест: проверка команд, регистров и всех флагов SREG
+        code: `; Тема 5. Пример 2: Прерывания PCINT0 и PCINT2
+.include "m328pdef.inc"
+.org 0
+jmp Reset
+.org 0x006
+jmp mPCINT0
+.org 0x00A
+jmp mPCINT2
+
+Reset:
+ldi r16, low(RAMEND)
+out spl, r16
+ldi r16, high(RAMEND)
+out sph, r16
+ldi r16, 0x07
+sts PCICR, r16       ; Разрешение PCI0, PCI1, PCI2
+ldi r16, 0xFF
+sts PCMSK0, r16      ; Все биты Порта B
+sts PCMSK2, r16      ; Все биты Порта D
+sei
+
+m:
+inc r17
+jmp m
+
+mPCINT0:
+in r20, PINB
+mov r22, r18
+eor r22, r20         ; Выявление изменившегося бита
+mov r18, r20
+reti
+
+mPCINT2:
+in r21, PIND
+mov r23, r19
+eor r23, r21         ; Выявление изменившегося бита
+mov r19, r21
+reti`
+    },
+
+    // ТЕМА 6: ПРИМЕР 1 НА ASM (Стр. 10: Отправка символа '>' в UART по кнопке K1 на PD2)
+    lab6_asm_uart_btn: {
+        hint: "Тема 6, Пример 1 (ASM): Нажатие K1 (PD2, INT0) отправляет символ '>' (0x3E) в терминал UART.",
+        lang: "asm",
+        code: `; Тема 6. Пример 1: Отправка символа по нажатию кнопки
+.include "m328pdef.inc"
+.org 0
+jmp Reset
+.org 0x002
+jmp knopka
+
+Reset:
+ldi r16, 0x03
+sts EICRA, r16       ; INT0 по фронту
+ldi r16, 0x01
+out EIMSK, r16       ; Разрешение INT0
+cbi ddrd, 2
+sbi portd, 2         ; Подтяжка PD2
+
+.equ CLK = 16000000
+.equ BAUD = 9600
+.equ UBRR0_value = (CLK/(BAUD*16)) - 1
+
+ldi r16, high(UBRR0_value)
+sts UBRR0H, r16
+ldi r16, low(UBRR0_value)
+sts UBRR0L, r16
+ldi r16, (1<<TXEN0)
+sts UCSR0B, r16
+ldi r16, (1<<UCSZ00)|(1<<UCSZ01)
+sts UCSR0C, r16
+sei
+
+main:
+jmp main
+
+knopka:
+ldi r16, 0x3E        ; Символ '>'
+sts UDR0, r16
+reti`
+    },
+
+    // ТЕМА 6: ПРИМЕР 2 НА ASM (Стр. 12: LPM, BST, чтение строки ReadyToWork из .db Flash)
+    lab6_asm_lpm_msg: {
+        hint: "Тема 6, Пример 2 (ASM): Посимвольная отправка строки из Flash (LPM, Z+, BST r17, 5).",
+        lang: "asm",
+        code: `; Тема 6. Пример 2: Передача сообщения из ПЗУ (.db) через LPM и BST
+.include "m328pdef.inc"
+.org 0
+jmp Reset
+
+Reset:
+ldi r16, 103
+sts UBRR0L, r16      ; 9600 бод при 16 МГц
+ldi r16, (1<<TXEN0)
+sts UCSR0B, r16
+ldi r16, (1<<UCSZ00)|(1<<UCSZ01)
+sts UCSR0C, r16
+sei
+
+main:
+ldi zl, low(Msg<<1)
+ldi zh, high(Msg<<1)
+ldi r18, 22          ; Длина строки
+
+send:
+lpm r16, Z+          ; Загрузка символа из памяти программ с постинкрементом Z
+sts UDR0, r16
+subi r18, 1
+
+repeat:
+lds r17, UCSR0A
+bst r17, 5           ; Копирование бита UDRE0 во флаг T
+brtc repeat          ; Ожидание готовности буфера
+cpi r18, 0
+breq main            ; Повтор передачи строки
+jmp send
+
+.cseg
+Msg: .db "Atmega328P:ReadyToWork", '\n'`
+    },
+
+    // ТЕМА 6: ЗАДАНИЕ 3 НА C (Стр. 13: Прием символа 'A' по прерыванию USART_RX зажигает LED L)
+    lab6_c_rx_led: {
+        hint: "Тема 6, Задание 3 (C): Введите в поле терминала букву 'A' и нажмите Enter — светодиод L (PB5) зажжется!",
+        lang: "c",
+        code: `#include <avr/io.h>
+#include <avr/interrupt.h>
+
+// Прерывание по завершению приема байта UART
+ISR(USART_RX_vect)
+{
+    if (UDR0 == 'A')
+    {
+        PORTB |= (1 << PORTB5);  // Включить LED L при получении 'A'
+    }
+    else
+    {
+        PORTB &= ~(1 << PORTB5); // Погасить для любого другого символа
+    }
+}
+
+int main(void)
+{
+    DDRB |= (1 << DDB5);        // PB5 (LED L) на вывод
+    UBRR0 = 103;                // 9600 бод
+    UCSR0B |= (1 << RXEN0) | (1 << RXCIE0); // Включение приемника и прерывания RX
+    UCSR0C |= (1 << UCSZ01) | (1 << UCSZ00);
+
+    sei();
+
+    while (1)
+    {
+    }
+}`
+    },
+
+    // Комплексный тест всех флагов SREG
+    test_all: {
+        hint: "Комплексный тест: проверка всех флагов SREG (I, T, H, S, V, N, Z, C), adiw, sbiw и математики АЛУ.",
+        lang: "asm",
+        code: `; Тест флагов SREG, T, ADIW и АЛУ
 .include "m328pdef.inc"
 start:
     ldi r16, 0x08
@@ -2047,48 +2341,15 @@ start:
     subi r17, -3
     ldi r18, 0x80
     neg r18
+    ldi r26, 0xFE
+    ldi r27, 0x00
+    adiw xl, 2          ; Проверка 16-битного adiw
     break
 finish:
     rjmp finish`
     },
 
-    led_running: {
-        hint: "Бегущий огонёк по светодиодам Порта D.",
-        lang: "asm",
-        code: `; Бегущий огонёк по выводам PD0..PD7
-.include "m328pdef.inc"
-
-start:
-    ser r16
-    out DDRD, r16
-    ldi r17, 1
-
-loop:
-    out PORTD, r17
-    lsl r17
-    brne loop
-    ldi r17, 1
-    rjmp loop`
-    },
-
-    uart_tx: {
-        hint: "Вывод символов текста в виртуальный регистр UDR0 (монитор UART).",
-        lang: "asm",
-        code: `; Отправка текстовых символов в терминал UART
-.include "m328pdef.inc"
-start:
-    ldi r16, 0x48    ; 'H'
-    out UDR0, r16
-    ldi r16, 0x69    ; 'i'
-    out UDR0, r16
-    ldi r16, 0x21    ; '!'
-    out UDR0, r16
-    ldi r16, 0x0A    ; '\\n'
-    out UDR0, r16
-stop:
-    break`
-    },
-
+    // Сортировка массива в ОЗУ
     sort_ram: {
         hint: "Сортировка массива в ОЗУ с использованием команды adiw и указателя X (пара r26:r27).",
         lang: "asm",
@@ -2135,7 +2396,25 @@ finish:
 };
 
 function loadSelectedExample() {
-    const key = document.getElementById('exampleSelector').value;
+    const selector = document.getElementById('exampleSelector');
+    if (!selector) return;
+
+    // Автоматическое наполнение выпадающего списка примерами из обеих методичек
+    if (!selector.dataset.initialized) {
+        selector.innerHTML = `
+            <option value="lab5_asm_int1">📝 ASM Тема 5: Прерывание INT1 по низкому уровню (стр. 11)</option>
+            <option value="c_interrupt_int0">⚡ C Тема 5: Прерывание INT1_vect (стр. 14)</option>
+            <option value="lab5_asm_pcint">📝 ASM Тема 5: PCINT0 и PCINT2 с анализом бита (стр. 15)</option>
+            <option value="lab6_asm_uart_btn">📝 ASM Тема 6: Отправка символа '>' по кнопке K1 (стр. 10)</option>
+            <option value="lab6_asm_lpm_msg">📝 ASM Тема 6: LPM + BST чтение строки ReadyToWork (стр. 12)</option>
+            <option value="lab6_c_rx_led">⚡ C Тема 6: Прием 'A' по USART_RX зажигает LED L (стр. 13)</option>
+            <option value="test_all" selected>📝 ASM: Тест всех флагов SREG, T, ADIW и АЛУ</option>
+            <option value="sort_ram">📝 ASM: Сортировка массива в ОЗУ (adiw / пара X)</option>
+        `;
+        selector.dataset.initialized = "true";
+    }
+
+    const key = selector.value;
     const banner = document.getElementById('hintBanner');
     if (PROGRAMS[key]) {
         document.getElementById('asmCode').value = PROGRAMS[key].code;
