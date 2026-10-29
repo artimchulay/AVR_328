@@ -18,16 +18,18 @@
             <div class="toolbar-left">
                 <div class="logo">⚡ <span>AVR Studio</span></div>
                 <div class="select-wrapper">
-                    <select id="exampleSelector" onchange="loadSelectedExample()">
-                        <option value="test_all" selected>📝 ASM: Тест всех флагов SREG, T, ADIW</option>
-                        <option value="lab5_asm_int1">📝 ASM Тема 5: Прерывание INT1 по низкому уровню</option>
-                        <option value="c_interrupt_int0">⚡ C Тема 5: Прерывание INT1_vect</option>
-                        <option value="lab5_asm_pcint">📝 ASM Тема 5: PCINT0 и PCINT2 (побитово)</option>
-                        <option value="lab6_asm_uart_btn">📝 ASM Тема 6: Отправка символа '>' в UART</option>
-                        <option value="lab6_asm_lpm_msg">📝 ASM Тема 6: LPM + BST чтение строки ReadyToWork</option>
-                        <option value="lab6_c_rx_led">⚡ C Тема 6: Прием 'A' зажигает LED L</option>
-                        <option value="sort_ram">📝 ASM: Сортировка массива в ОЗУ (adiw)</option>
-                    </select>
+                   <select id="exampleSelector" onchange="loadSelectedExample()">
+                        <!-- Программы на C -->
+                        <option value="c_interrupt_int0">⚡ C: Внешнее прерывание INT0 (Кнопка K1)</option>
+                        <option value="c_blink_counter">⚡ C: Мигающий светодиод L (Счетчик 800 000)</option>
+                        <option value="c_zadanie5">⚡ C: Кнопки-переключатели светодиодов (PD2..PD4)</option>
+                        <option value="c_example3">⚡ C: Кнопка включает светодиод L</option>
+                        <!-- Программы на ASM -->
+                        <option value="test_all" selected>📝 ASM: Комплексный тест: команды и флаги SREG</option>
+                        <option value="led_running">📝 ASM: Бегущий огонёк (Порт D)</option>
+                        <option value="uart_tx">📝 ASM: Отправка текста в терминал (UART)</option>
+                        <option value="sort_ram">📝 ASM: Сортировка массива в ОЗУ (0x0100)</option>
+                </select>
                 </div>
             </div>
 
